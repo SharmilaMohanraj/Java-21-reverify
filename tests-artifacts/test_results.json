@@ -1,0 +1,29 @@
+[
+  {
+    "#": 1,
+    "Method": "GET",
+    "Endpoint": "/api/departments",
+    "Description": "Protected route rejects an unauthenticated request",
+    "Status Code": 401,
+    "Pass/Fail": "PASS",
+    "Reason": "Observed HTTP 401; expected one of [401]"
+  },
+  {
+    "#": 2,
+    "Method": "POST",
+    "Endpoint": "/api/auth/login",
+    "Description": "HR seed account can log in against the live MySQL-backed application",
+    "Status Code": 200,
+    "Pass/Fail": "PASS",
+    "Reason": "Observed HTTP 200; expected one of [200]"
+  },
+  {
+    "#": 3,
+    "Method": "GET",
+    "Endpoint": "/api/departments",
+    "Description": "JWT from login authorizes a current persisted HR employee",
+    "Status Code": 200,
+    "Pass/Fail": "PASS",
+    "Reason": "Observed HTTP 200; expected one of [200]"
+  }
+]

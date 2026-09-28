@@ -11,16 +11,15 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
-import org.hibernate.annotations.Check;
-
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import org.hibernate.annotations.Check;
 
 @Entity
 @Table(name = "payroll_record")
 @Check(constraints = "period_end >= period_start AND gross_pay >= 0 AND deductions >= 0 AND net_pay = gross_pay - deductions")
 public class PayrollRecord {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -53,68 +52,40 @@ public class PayrollRecord {
     @Column(name = "net_pay", nullable = false, precision = 19, scale = 2)
     private BigDecimal netPay;
 
-    protected PayrollRecord() {
-    }
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
+    protected PayrollRecord() { }
 
     public PayrollRecord(Employee employee, LocalDate periodStart, LocalDate periodEnd,
                          BigDecimal grossPay, BigDecimal deductions, BigDecimal netPay) {
+        this(employee, periodStart, periodEnd, grossPay, deductions, netPay, null);
+    }
+
+    public PayrollRecord(Employee employee, LocalDate periodStart, LocalDate periodEnd,
+                         BigDecimal grossPay, BigDecimal deductions, BigDecimal netPay, Instant paidAt) {
         this.employee = employee;
         this.periodStart = periodStart;
         this.periodEnd = periodEnd;
         this.grossPay = grossPay;
         this.deductions = deductions;
         this.netPay = netPay;
+        this.paidAt = paidAt;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public Employee getEmployee() {
-        return employee;
-    }
-
-    public void setEmployee(Employee employee) {
-        this.employee = employee;
-    }
-
-    public LocalDate getPeriodStart() {
-        return periodStart;
-    }
-
-    public void setPeriodStart(LocalDate periodStart) {
-        this.periodStart = periodStart;
-    }
-
-    public LocalDate getPeriodEnd() {
-        return periodEnd;
-    }
-
-    public void setPeriodEnd(LocalDate periodEnd) {
-        this.periodEnd = periodEnd;
-    }
-
-    public BigDecimal getGrossPay() {
-        return grossPay;
-    }
-
-    public void setGrossPay(BigDecimal grossPay) {
-        this.grossPay = grossPay;
-    }
-
-    public BigDecimal getDeductions() {
-        return deductions;
-    }
-
-    public void setDeductions(BigDecimal deductions) {
-        this.deductions = deductions;
-    }
-
-    public BigDecimal getNetPay() {
-        return netPay;
-    }
-
-    public void setNetPay(BigDecimal netPay) {
-        this.netPay = netPay;
-    }
+    public Long getId() { return id; }
+    public Employee getEmployee() { return employee; }
+    public void setEmployee(Employee employee) { this.employee = employee; }
+    public LocalDate getPeriodStart() { return periodStart; }
+    public void setPeriodStart(LocalDate periodStart) { this.periodStart = periodStart; }
+    public LocalDate getPeriodEnd() { return periodEnd; }
+    public void setPeriodEnd(LocalDate periodEnd) { this.periodEnd = periodEnd; }
+    public BigDecimal getGrossPay() { return grossPay; }
+    public void setGrossPay(BigDecimal grossPay) { this.grossPay = grossPay; }
+    public BigDecimal getDeductions() { return deductions; }
+    public void setDeductions(BigDecimal deductions) { this.deductions = deductions; }
+    public BigDecimal getNetPay() { return netPay; }
+    public void setNetPay(BigDecimal netPay) { this.netPay = netPay; }
+    public Instant getPaidAt() { return paidAt; }
+    public void setPaidAt(Instant paidAt) { this.paidAt = paidAt; }
 }

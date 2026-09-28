@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
 public record PayrollRecordRequest(
@@ -15,7 +16,8 @@ public record PayrollRecordRequest(
         @NotNull LocalDate periodEnd,
         @NotNull @DecimalMin(value = "0.00") @Digits(integer = 17, fraction = 2) BigDecimal grossPay,
         @NotNull @DecimalMin(value = "0.00") @Digits(integer = 17, fraction = 2) BigDecimal deductions,
-        @NotNull @DecimalMin(value = "0.00") @Digits(integer = 17, fraction = 2) BigDecimal netPay
+        @NotNull @DecimalMin(value = "0.00") @Digits(integer = 17, fraction = 2) BigDecimal netPay,
+        Instant paidAt
 ) {
     @AssertTrue(message = "period end must not be before period start")
     public boolean isValidPeriod() {

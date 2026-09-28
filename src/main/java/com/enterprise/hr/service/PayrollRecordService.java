@@ -30,7 +30,7 @@ public class PayrollRecordService {
         validateBusinessRules(request);
         PayrollRecord record = new PayrollRecord(
                 findEmployee(request.employeeId()), request.periodStart(), request.periodEnd(),
-                request.grossPay(), request.deductions(), request.netPay());
+                request.grossPay(), request.deductions(), request.netPay(), request.paidAt());
         return toResponse(payrollRecordRepository.save(record));
     }
 
@@ -53,6 +53,7 @@ public class PayrollRecordService {
         record.setGrossPay(request.grossPay());
         record.setDeductions(request.deductions());
         record.setNetPay(request.netPay());
+        record.setPaidAt(request.paidAt());
         return toResponse(payrollRecordRepository.save(record));
     }
 
@@ -89,6 +90,6 @@ public class PayrollRecordService {
     private PayrollRecordResponse toResponse(PayrollRecord record) {
         return new PayrollRecordResponse(
                 record.getId(), record.getEmployee().getId(), record.getPeriodStart(), record.getPeriodEnd(),
-                record.getGrossPay(), record.getDeductions(), record.getNetPay());
+                record.getGrossPay(), record.getDeductions(), record.getNetPay(), record.getPaidAt());
     }
 }

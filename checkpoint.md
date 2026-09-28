@@ -8,8 +8,8 @@
 | 6 Seed data | Deferred: no credentials supplied; deployment-safe seed is not created |
 | 7 Infra/start scripts | Complete |
 | 9 Documentation | Complete |
-| 10–14 Verification/fix loop | Complete with external MySQL boot blocker recorded |
-| 15 Reports | Complete |
+| 10–14 Verification/fix loop | Complete — remediation tests, Gradle tests, and live database-backed API verification passed |
+| 15 Reports | Complete — regenerated from live HTTP results |
 
 ## Decisions
 - Java 21 / Spring Boot 3.4.0 / Gradle 8.11.1; package `com.enterprise.hr`; app port 8080.
@@ -44,6 +44,11 @@
 
 ## Verification
 - `./gradlew build --no-daemon`: PASS.
-- `./gradlew test --no-daemon`: PASS (2 JUnit tests).
-- Boot verification: attempted 3/3 times with `scripts/start.sh`. Each attempt reached Spring startup but exited because MySQL at localhost:3306 refused the connection. Docker daemon was unavailable, so the generated MySQL compose service could not be started. The requested login curl could not be issued against a live application.
-- Reports: `tests-artifacts/api_test_report.xlsx` and `tests-artifacts/project_report.docx` generated. The workbook records the actual JUnit success and the failed/skipped login probe with its real boot-attempt reason.
+- `./gradlew test --no-daemon`: PASS (the original enum tests plus focused payroll, organization-delete, and JWT-filter tests).
+- Remediation: `PayrollRecord.paidAt` is nullable `Instant` data mapped through create/update/response; assigned department/designation deletes reject with 409 `DEPARTMENT_ASSIGNED` / `DESIGNATION_ASSIGNED`; JWT authentication resolves the current Employee and derives authority from its persisted role.
+- Live boot/API verification: PASS on boot attempt 3/3, using `scripts/start.sh` and a locally available MySQL-compatible MariaDB instance at localhost:3306. The app connected through the MySQL JDBC driver, booted on port 8080, and was stopped by its recorded PID; database service was stopped after verification.
+- Live requests recorded by the verification runner: unauthenticated `GET /api/departments` -> 401 PASS; `POST /api/auth/login` -> 200 PASS using provisioned HR verification account; authenticated `GET /api/departments` -> 200 PASS. This also proves JWT authentication resolves the persisted employee.
+- Reports: regenerated `tests-artifacts/api_test_report.xlsx`, `tests-artifacts/project_report.docx`, and readable source-of-truth `tests-artifacts/test_results.json`. Workbook columns and all three observed rows were inspected after generation.
+
+## Unit status: Organization assignment guards
+- Complete: Department and Designation deletion now confirms the resource exists, rejects employee-assigned resources with HTTP 409 `BusinessRuleException` codes `DEPARTMENT_ASSIGNED` / `DESIGNATION_ASSIGNED`, and deletes unassigned resources normally. Focused service tests cover assigned, unassigned, and not-found paths.
