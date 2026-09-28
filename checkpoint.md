@@ -49,6 +49,7 @@
 - Live boot/API verification: PASS on boot attempt 3/3, using `scripts/start.sh` and a locally available MySQL-compatible MariaDB instance at localhost:3306. The app connected through the MySQL JDBC driver, booted on port 8080, and was stopped by its recorded PID; database service was stopped after verification.
 - Live requests recorded by the verification runner: unauthenticated `GET /api/departments` -> 401 PASS; `POST /api/auth/login` -> 200 PASS using provisioned HR verification account; authenticated `GET /api/departments` -> 200 PASS. This also proves JWT authentication resolves the persisted employee.
 - Reports: regenerated `tests-artifacts/api_test_report.xlsx`, `tests-artifacts/project_report.docx`, and readable source-of-truth `tests-artifacts/test_results.json`. Workbook columns and all three observed rows were inspected after generation.
+- Start script: runs the packaged Spring Boot JAR directly for PID-safe verification and builds that JAR first when it is absent.
 
 ## Unit status: Organization assignment guards
 - Complete: Department and Designation deletion now confirms the resource exists, rejects employee-assigned resources with HTTP 409 `BusinessRuleException` codes `DEPARTMENT_ASSIGNED` / `DESIGNATION_ASSIGNED`, and deletes unassigned resources normally. Focused service tests cover assigned, unassigned, and not-found paths.
