@@ -1,0 +1,1063 @@
+2026-09-28 10:05:07,665 INFO deepagent.transcript: [human] Job title: Build a Java 21 Spring Boot 3.4.0 Gradle 8.11.1 REST backend using MySQL through Spring Data JPA/Hibernate for enterpris
+
+Use exactly this project name: job-d559a533-f213-4744-9e90-c578859a7a58
+
+Plan:
+# Build a Java 21 Spring Boot 3.4.0 Gradle 8.11.1 REST backend using MySQL through Spring Data JPA/Hibernate for enterprise HR management. Authenticate employees with JWT and authorize requests using exactly the HR, MANAGER, and EMPLOYEE roles. Employees have credentials, a role, optional department and designation assignments, and an optional manager who is another employee; the manager relationship represents the subordinate hierarchy. Provide HR-controlled onboarding, department management, designation management, payroll record management, performance review cycle management, employee manager assignment, and administrative attendance and leave-balance reports. Provide authenticated employee attendance check-in and check-out operations with server-recorded timestamps and retrieval of the caller's attendance. Do not allow a second open attendance record before checkout. Provide leave requests with inclusive start and end dates, a reason, and PENDING, APPROVED, or REJECTED status. Employees create and view their own requests; managers approve or reject requests for their direct subordinates. Approval must reject overlapping requests and requests whose duration exceeds the employee's remaining annual leave balance. Store each employee's annual leave entitlement and calculate remaining leave as entitlement minus approved leave days. Treat HR as the administrative role for the requested reports because no separate ADMIN role was requested. Expose JSON APIs, validate request bodies, use appropriate HTTP status codes, and return structured API errors for validation, missing-resource, authentication, authorization, and business-rule failures.
+
+Build a Java 21 Spring Boot 3.4.0 Gradle 8.11.1 REST backend using MySQL through Spring Data JPA/Hibernate for enterprise HR management. Authenticate employees with JWT and authorize requests using exactly the HR, MANAGER, and EMPLOYEE roles. Employees have credentials, a role, optional department and designation assignments, and an optional manager who is another employee; the manager relationship represents the subordinate hierarchy. Provide HR-controlled onboarding, department management, designation management, payroll record management, performance review cycle management, employee manager assignment, and administrative attendance and leave-balance reports. Provide authenticated employee attendance check-in and check-out operations with server-recorded timestamps and retrieval of the caller's attendance. Do not allow a second open attendance record before checkout. Provide leave requests with inclusive start and end dates, a reason, and PENDING, APPROVED, or REJECTED status. Employees create and view their own requests; managers approve or reject requests for their direct subordinates. Approval must reject overlapping requests and requests whose duration exceeds the employee's remaining annual leave balance. Store each employee's annual leave entitlement and calculate remaining leave as entitlement minus approved leave days. Treat HR as the administrative role for the requested reports because no separate ADMIN role was requested. Expose JSON APIs, validate request bodies, use appropriate HTTP status codes, and return structured API errors for validation, missing-resource, authentication, authorization, and business-rule failures.
+
+## Stack
+- Language: java 21.0.12.1
+- Framework: spring-boot 3.4.0
+- Build tool: gradle 8.11.1
+- ORM: jpa-hibernate 6.6.2
+- Database: mysql 8.4.3
+
+## Entities
+### Employee (`employee`)
+An authenticated enterprise employee and the root of departmental, designation, and manager-subordinate assignments.
+- id: Long (required) — Database-generated primary key.
+- employeeCode: String (required) — Unique enterprise employee identifier.
+- fullName: String (required) — Employee display name.
+- email: String (required) — Unique login identity.
+- passwordHash: String (required) — BCrypt password hash; never returned by API responses.
+- role: Role enum (required) — HR, MANAGER, or EMPLOYEE.
+- annualLeaveEntitlementDays: Integer (required) — Annual leave allowance used by leave-balance reporting.
+- department: Department (optional) — Optional assigned department.
+- designation: Designation (optional) — Optional assigned designation.
+- manager: Employee (optional) — Optional direct manager.
+- Relationships: Many employees may belong to one department., Many employees may have one designation., An employee may have one direct manager and many direct subordinates., An employee owns attendance records, leave requests, and payroll records.
+
+### Department (`department`)
+A managed organizational department.
+- id: Long (required) — Database-generated primary key.
+- name: String (required) — Unique department name.
+- description: String (optional) — Optional department description.
+- Relationships: One department can be assigned to many employees.
+
+### Designation (`designation`)
+A managed employee job designation.
+- id: Long (required) — Database-generated primary key.
+- name: String (required) — Unique designation name.
+- description: String (optional) — Optional designation description.
+- Relationships: One designation can be assigned to many employees.
+
+### AttendanceRecord (`attendance`)
+One employee attendance interval containing check-in and optional check-out timestamps.
+- id: Long (required) — Database-generated primary key.
+- employee: Employee (required) — Employee who checked in.
+- checkInAt: Instant (required) — Server-recorded check-in timestamp.
+- checkOutAt: Instant (optional) — Server-recorded checkout timestamp; null while open.
+- Relationships: Many attendance records belong to one employee.
+
+### LeaveRequest (`leave_request`)
+An employee request for leave with a manager approval workflow.
+- id: Long (required) — Database-generated primary key.
+- employee: Employee (required) — Requesting employee.
+- startDate: LocalDate (required) — Inclusive leave start date.
+- endDate: LocalDate (required) — Inclusive leave end date.
+- reason: String (required) — Employee-provided reason.
+- status: LeaveStatus enum (required) — PENDING, APPROVED, or REJECTED.
+- reviewedBy: Employee (optional) — Manager who made the decision.
+- reviewedAt: Instant (optional) — Decision timestamp.
+- Relationships: Many leave requests belong to one employee., A decided leave request references the manager who reviewed it.
+
+### PayrollRecord (`payroll_record`)
+An HR-managed payroll record for an employee and payroll period.
+- id: Long (required) — Database-generated primary key.
+- employee: Employee (required) — Employee being paid.
+- payPeriodStart: LocalDate (required) — Payroll period start date.
+- payPeriodEnd: LocalDate (required) — Payroll period end date.
+- grossAmount: BigDecimal (required) — Gross payroll amount.
+- deductionAmount: BigDecimal (required) — Total deductions.
+- netAmount: BigDecimal (required) — Net payroll amount.
+- paidAt: Instant (optional) — Optional payment completion timestamp.
+- Relationships: Many payroll records belong to one employee.
+
+### PerformanceReviewCycle (`performance_review_cycle`)
+An HR-managed named period during which performance reviews occur.
+- id: Long (required) — Database-generated primary key.
+- name: String (required) — Unique cycle name.
+- startDate: LocalDate (required) — Cycle start date.
+- endDate: LocalDate (required) — Cycle end date.
+- description: String (optional) — Optional cycle description.
+
+## Endpoints
+- `POST /api/auth/login` — Authenticate with email and password and receive a JWT. (public)
+- `POST /api/employees` — HR onboards an employee with credentials, role, leave entitlement, and optional assignments. (auth required)
+- `PUT /api/employees/{employeeId}/manager` — HR assigns or clears an employee's direct manager. (auth required)
+- `POST /api/departments` — HR creates a department. (auth required)
+- `GET /api/departments` — Authenticated users list departments. (auth required)
+- `PUT /api/departments/{id}` — HR updates a department. (auth required)
+- `DELETE /api/departments/{id}` — HR deletes a department that is not assigned to employees. (auth required)
+- `POST /api/designations` — HR creates a designation. (auth required)
+- `GET /api/designations` — Authenticated users list designations. (auth required)
+- `PUT /api/designations/{id}` — HR updates a designation. (auth required)
+- `DELETE /api/designations/{id}` — HR deletes a designation that is not assigned to employees. (auth required)
+- `POST /api/attendance/check-in` — Authenticated employee creates an open attendance record using the current server timestamp. (auth required)
+- `POST /api/attendance/check-out` — Authenticated employee closes their open attendance record using the current server timestamp. (auth required)
+- `GET /api/attendance/me` — Authenticated employee lists their attendance records. (auth required)
+- `POST /api/leave-requests` — Authenticated employee submits a pending leave request. (auth required)
+- `GET /api/leave-requests/me` — Authenticated employee lists their leave requests. (auth required)
+- `GET /api/leave-requests/pending-subordinates` — Manager lists pending requests from direct subordinates. (auth required)
+- `PATCH /api/leave-requests/{id}/decision` — Direct manager approves or rejects a pending subordinate leave request. (auth required)
+- `POST /api/payroll-records` — HR creates a payroll record. (auth required)
+- `GET /api/payroll-records` — HR lists payroll records. (auth required)
+- `PUT /api/payroll-records/{id}` — HR updates a payroll record. (auth required)
+- `DELETE /api/payroll-records/{id}` — HR deletes a payroll record. (auth required)
+- `POST /api/performance-review-cycles` — HR creates a performance review cycle. (auth required)
+- `GET /api/performance-review-cycles` — Authenticated users list performance review cycles. (auth required)
+- `PUT /api/performance-review-cycles/{id}` — HR updates a performance review cycle. (auth required)
+- `DELETE /api/performance-review-cycles/{id}` — HR deletes a performance review cycle. (auth required)
+- `GET /api/reports/attendance` — HR retrieves attendance report data, optionally filtered by inclusive date range. (auth required)
+- `GET /api/reports/leave-balances` — HR retrieves every employee's annual entitlement, approved leave days, and remaining leave balance. (auth required)
+
+## Files
+### Wave 1
+- `settings.gradle` — Declare the Gradle root project.
+  - exports/contract: Sets the root project name to hr-management-api.
+  - acceptance: Gradle recognizes the project root.
+- `src/main/java/com/enterprise/hr/HrManagementApplication.java` — Provide the Spring Boot application entry point.
+  - exports/contract: Exports public class HrManagementApplication in package com.enterprise.hr with a standard main method calling SpringApplication.run.
+  - acceptance: The class is a valid @SpringBootApplication entry point.
+- `src/main/java/com/enterprise/hr/domain/HrDomain.java` — Define all JPA entities, role/workflow enums, mappings, constraints, and entity lifecycle data for the HR domain.
+  - exports/contract: Exports public JPA entity classes Employee, Department, Designation, AttendanceRecord, LeaveRequest, PayrollRecord, and PerformanceReviewCycle in com.enterprise.hr.domain; exports public enums Role with HR, MANAGER, EMPLOYEE and LeaveStatus with PENDING, APPROVED, REJECTED. Employee has unique employeeCode/email, BCrypt passwordHash, entitlement, optional Department/Designation, and self-referencing optional manager. AttendanceRecord has employee, checkInAt, nullable checkOutAt. LeaveRequest has employee, inclusive dates, reason, status, nullable reviewer/timestamp. PayrollRecord and PerformanceReviewCycle expose the fields described in the specification. Entities provide constructors/getters/setters required by JPA and services without serializing password hashes.
+  - acceptance: All seven declared entities are annotated and persistable.; Database uniqueness and non-null constraints enforce required identifiers and workflow data.; Role and leave-status enum values exactly match the specified values.
+- `src/main/resources/application.yml` — Provide externalized MySQL, JPA, JWT, and server configuration.
+  - exports/contract: Defines datasource URL, username, and password from environment variables with local MySQL defaults; configures Hibernate schema update and MySQL dialect; defines JWT secret and expiration properties configurable by environment; configures JSON error output suitable for API validation failures.
+  - acceptance: Application configuration contains no hard-coded production credentials and binds datasource and JWT settings from environment variables.
+### Wave 2
+- `build.gradle` — Configure the Java 21 Spring Boot Gradle build and required runtime libraries.
+  - depends on: settings.gradle
+  - exports/contract: Applies Spring Boot 3.4.0 and dependency-management plugins; configures Java 21; provides Spring Web, Validation, Security, Spring Data JPA, MySQL connector, JJWT API/implementation/Jackson modules, and Spring Boot test dependencies; configures JUnit Platform.
+  - acceptance: ./gradlew build resolves all dependencies and compiles the project with Java 21.
+- `src/main/java/com/enterprise/hr/api/HrDtos.java` — Define validated request records and safe response/report records for all HTTP APIs.
+  - depends on: src/main/java/com/enterprise/hr/domain/HrDomain.java
+  - exports/contract: Exports public request/response DTO records in com.enterprise.hr.api for login/token, employee onboarding and manager assignment, department/designation create-update responses, attendance responses, leave creation/decision/responses, payroll create-update/responses, review-cycle create-update/responses, attendance reports, leave-balance reports, and API errors. Requests use Jakarta Validation constraints. Response DTOs never expose Employee.passwordHash. Leave decision input accepts only APPROVED or REJECTED, not PENDING.
+  - acceptance: Every mutating endpoint has a typed validated request DTO.; All API response DTOs avoid credential hashes.; DTOs can represent every field required by the declared endpoints and reports.
+- `src/main/java/com/enterprise/hr/repository/HrRepositories.java` — Define Spring Data repository interfaces and query methods needed by authentication, workflow, reporting, and management services.
+  - depends on: src/main/java/com/enterprise/hr/domain/HrDomain.java
+  - exports/contract: Exports public repository interfaces EmployeeRepository, DepartmentRepository, DesignationRepository, AttendanceRecordRepository, LeaveRequestRepository, PayrollRecordRepository, and PerformanceReviewCycleRepository in com.enterprise.hr.repository. EmployeeRepository supports lookup by email and employee code; AttendanceRecordRepository supports current employee records and an employee's open record; LeaveRequestRepository supports employee requests, pending direct-subordinate requests, approved leave total/date overlap checks, and report retrieval; remaining repositories provide CRUD and required duplicate checks.
+  - acceptance: Each repository extends JpaRepository for its corresponding domain entity.; Repository methods support all service operations without exposing raw SQL to controllers.
+### Wave 3
+- `src/main/java/com/enterprise/hr/api/ApiExceptionHandler.java` — Translate application, validation, authentication, and authorization failures into consistent JSON API errors.
+  - depends on: src/main/java/com/enterprise/hr/api/HrDtos.java
+  - exports/contract: Exports public API exception types ResourceNotFoundException and BusinessRuleException plus public @RestControllerAdvice ApiExceptionHandler in com.enterprise.hr.api. It maps validation failures to 400, missing resources to 404, business-rule failures to 409, authentication failures to 401, and authorization failures to 403 using the HrDtos API error response shape.
+  - acceptance: Invalid request bodies return structured 400 JSON errors.; Workflow conflicts return 409 and missing entity identifiers return 404.; Security failures have no stack traces or password data in responses.
+- `src/main/java/com/enterprise/hr/security/JwtSecurity.java` — Implement JWT issuing, JWT request authentication, authenticated employee lookup, password encoding, and route authorization.
+  - depends on: src/main/java/com/enterprise/hr/domain/HrDomain.java, src/main/java/com/enterprise/hr/repository/HrRepositories.java
+  - exports/contract: Exports public JwtService with token generation and validation methods, public JwtAuthenticationFilter extending OncePerRequestFilter, and public SecurityConfig exposing PasswordEncoder and SecurityFilterChain beans in com.enterprise.hr.security. JWT subject is employee email and includes the role authority. The filter loads the current Employee through EmployeeRepository. Security is stateless, permits only POST /api/auth/login anonymously, requires authentication elsewhere, and provides role restrictions that controllers may additionally enforce with @PreAuthorize.
+  - acceptance: Passwords are checked and encoded with BCrypt.; Valid bearer JWTs establish Spring Security authentication with HR, MANAGER, or EMPLOYEE authority.; Missing or invalid JWTs cannot access protected routes.
+### Wave 4
+- `src/main/java/com/enterprise/hr/service/HrService.java` — Implement all business operations, authorization-sensitive ownership checks, workflow rules, entity mapping, and reporting calculations.
+  - depends on: src/main/java/com/enterprise/hr/domain/HrDomain.java, src/main/java/com/enterprise/hr/repository/HrRepositories.java, src/main/java/com/enterprise/hr/api/HrDtos.java, src/main/java/com/enterprise/hr/security/JwtSecurity.java
+  - exports/contract: Exports public HrService in com.enterprise.hr.service with methods used by HrController for login, onboarding, manager assignment, department/designation CRUD, check-in/out and personal attendance, leave creation/listing/pending-subordinate listing/decision, payroll CRUD, review-cycle CRUD, attendance reports, and leave-balance reports. It accepts and returns HrDtos DTOs, uses repositories, uses PasswordEncoder for onboarding, JwtService for login, and throws defined API exceptions for missing data and invalid business state. It obtains the authenticated employee from SecurityContext. Manager decisions are allowed only for direct subordinates; only PENDING requests are decidable; approved requests must not overlap existing approved requests and must fit remaining entitlement. Check-in/check-out timestamps are Instant.now().
+  - acceptance: Service methods enforce the requested role, ownership, manager hierarchy, attendance, and leave workflow rules.; Remaining leave equals entitlement minus approved inclusive leave days.; Deletion of a department or designation assigned to an employee is rejected rather than silently corrupting assignments.
+### Wave 5
+- `src/main/java/com/enterprise/hr/api/HrController.java` — Expose all requested REST endpoints and delegate validated work to HrService.
+  - depends on: src/main/java/com/enterprise/hr/api/HrDtos.java, src/main/java/com/enterprise/hr/service/HrService.java, src/main/java/com/enterprise/hr/security/JwtSecurity.java
+  - exports/contract: Exports public @RestController HrController in com.enterprise.hr.api. It defines exactly the declared /api/auth, /api/employees, /api/departments, /api/designations, /api/attendance, /api/leave-requests, /api/payroll-records, /api/performance-review-cycles, and /api/reports routes. It uses @Valid DTO bodies, response status codes appropriate to creation/deletion, and @PreAuthorize restrictions: HR for onboarding, hierarchy, management, payroll, and reports; MANAGER for pending-subordinate and decision routes; any authenticated role for common list, personal attendance, and personal leave routes.
+  - acceptance: Every declared endpoint has a matching method, HTTP verb, and path.; Controller methods use validated DTOs and do not access repositories directly.; Role annotations prevent non-HR users from management/reports and non-managers from subordinate approval routes.
+
+## Verification
+- ./gradlew build
+- ./gradlew test
+- curl -sS -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{"email":"unknown@example.com","password":"invalid"}'
+
+2026-09-28 10:05:09,237 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+2026-09-28 10:05:09,396 INFO deepagent.transcript: [ai] tool_calls=[ls({'path': '/reference'}); ls({'path': '/modes'}); ls({'path': '/capabilities'})] [{'id': 'rs_073ef31e7a24e662006aba3bd4692887d2a74927b7cdb9c5bc', 'summary': [], 'type': 'reasoning', 'content': [], 'encrypted_content': 'gAAAAABqujvVH1R8tUuPY9F9homQkBJ4-fVpZpOSVvMTBUSu2PFGdvm2qIdkxPQMC2GwwKXN6Q3BY3B_74S2kLz89D-SE3K1-UF8vxTyYio57f6GJOJlEqg_zy9Id-_9NLIPByApGg372uHjniJnLeilster0cuSH4wpH89U-3FnyoLLGLqmRXY2zaOcquGztKwfN-Kq_6rhLIjII0Dh26rQWAngQQtr65ws41VUlszGLAve0O2KzDXhgeGuU_c0MlaSsXkqjGBv5L4JAj_c3NJKlBSt2Ge6SjrlEPAeMkjFlsKtxTlZ-2ySNEsgLbzqIGS8zBPhUrFYtDsY6_x7hlZt7393VMtYbc0VL9xDxbOv4UfelsoCcSsttg6BiJ-4Ga0Q3__CY5ZeY9c2BO_ozQJEkjIW7Tf9EaCI8SRt452WQx9aTtjW3pkwb1DGqLbtfuhTuDc-laJMT5_zZLiAN6meZLmSCED3DtbfSQqIs_5yS_tbVbZaO3F9V4H-BBdiTS1e87Vk6rDjvg-f5AkmJ0xpGXSOmScaIMzCTZ0re1MZasdoI6dIgAbBv0r7t9wtT5PUHcvvkbNejdAg5e6pb-trGOxVfkdSSvXdejLHzRvS3UalIH9GpTmEEHjffpz8H0UG0Q-jF1oiPJUa4xI8tR3nh1TxzCiE4zzcNCNqgtXaZjHy0Q109jC58wYCkeCR-IGYr6FbE6I98UDjXr-4Doj91Glz_5DgOyPOefTTK18_a7Q_daMIlfQt8xGw_lF-wmppVQ-73de5mVJGp5I30XLBKZcH7ttrID-s_10K4FAaIFfUNutavH0q6XmdXhQ0GlKDz1EdVNg3OS3plBLfo2uyZlMX8QKT_r5Si8kkyMnIC8UoPm1Fu2B0Lgaa_Q_XnBbcVKL_WlISY5Ewus-wRrS8-CwhQ6UVDjuk3UH6S2L2FAtxuz8lE0tkkgTYM5wQWv49jkfDdjfi4YCJj7gnEAuCsSYV58n5QZBAVvJ0zgd7rC7BbWEZOaxwM4nbvb7XtlBSS0puSWGQpg9-nK4fuAsOLJvih3scmvLNaHcyFax60tnPQ5X60GxhFEpF0syWPhuGFqyqW0dSbxj-xqz7cnAhi1OSOmuUN7rG0XjmcDgvr5c6OK87M2BuNGdqB9JLQbpoGBoj5PxFFQ7KFeG67ZQY-0gPrtIdi3dx5YwIoHjk4wmaWuF4SmLaVx53UsM7gQQ0ZT6nyj1OTWypi78U40Tf-DTYv2Y2ng=='}, {'arguments': '{"path":"/reference"}', 'call_id': 'call_rZzGyi0t1A7JqaOeIuUNx10i', 'name': 'ls', 'type': 'function_call', 'id': 'fc_073ef31e7a24e662006aba3bd4df1487d2b1fcb6501385eb21', 'status': 'completed'}, {'arguments': '{"path":"/modes"}', 'call_id': 'call_2dtXP8wbwAfaUUgkYNSJHTGx', 'name': 'ls', 'type': 'function_call', 'id': 'fc_073ef31e7a24e662006aba3bd4df2887d280c0b045d013b7df', 'status': 'completed'}, {'arguments': '{"path":"/capabilities"}', 'call_id': 'call_9GAphwYE8zpgv8IsO6w767Gr', 'name': 'ls', 'type': 'function_call', 'id': 'fc_073ef31e7a24e662006aba3bd4df2c87d29295dd2daf5e97e0', 'status': 'completed'}]
+2026-09-28 10:05:09,410 INFO deepagent.transcript: [tool] (name=ls) ['/reference/01-overview.md', '/reference/02-request-intake-and-config.md', '/reference/03-tech-stack-versioning.md', '/reference/04-prompt-architecture.md', '/reference/05-agent-runtime.md', '/reference/06-task-pipeline.md', '/reference/07-quality-gates.md', '/reference/08-known-gaps.md']
+2026-09-28 10:05:09,410 INFO deepagent.transcript: [tool] (name=ls) ['/modes/brownfield/', '/modes/greenfield/']
+2026-09-28 10:05:09,410 INFO deepagent.transcript: [tool] (name=ls) ['/capabilities/auth.md', '/capabilities/build-quality-and-testing.md', '/capabilities/integrations-and-push.md', '/capabilities/kafka.md', '/capabilities/pagination.md', '/capabilities/reports-and-deploy.md']
+2026-09-28 10:05:10,736 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+2026-09-28 10:05:10,832 INFO deepagent.transcript: [ai] tool_calls=[read_file({'file_path': '/reference/04-prompt-architecture.md', 'offset': 0, 'limit': 240})] [{'arguments': '{"file_path":"/reference/04-prompt-architecture.md","offset":0,"limit":240}', 'call_id': 'call_tH4LXZyZhyjOq6gE9DeylH2c', 'name': 'read_file', 'type': 'function_call', 'id': 'fc_073ef31e7a24e662006aba3bd6585887d28f91030db99f2644', 'status': 'completed'}]
+2026-09-28 10:05:10,840 INFO deepagent.transcript: [tool] (name=read_file) @@ lines 1-38 of 38 @@
+# Prompt architecture
+
+How the 11 modes' prose SDLC gets assembled, and how a request picks one.
+
+## Two layers
+
+- **`prompts/targets/*/prompts.py`** — 11 mode orchestrators, each a pair of functions (`_build_*_system_prompt` / `_build_*_prompt`) returning that mode's complete prompt text. See [modes/](../modes/) for each one's exact STEP sequence.
+- **`prompts/capabilities/*/`** — reusable blocks every target builder imports: `auth`, `kafka`, `pagination`, `linting`, `formatting`, `testing`, `java_testing`, `fix_loop`, `reports`, `deploy`, `api_run`, `infra`, `connectors`, `github_push`, `azuredevops`, `frontend`, `email`, `tools_block`, `versions`, `brownfield_safety`. See [capabilities/](../capabilities/).
+
+## One dispatch source of truth
+
+A single pure function, `resolve_mode_key(github_url, language, framework, python_framework, microservices)`, classifies a request into exactly one of 11 mode keys — matching names used throughout this doc set:
+
+`fastapi_greenfield`, `django_greenfield`, `tornado_greenfield`, `flask_greenfield`, `bottle_greenfield`, `nodejs_greenfield`, `java_greenfield_monolith`, `java_greenfield_microservices`, `python_github`, `java_github`, `nodejs_github`.
+
+| # | Condition | mode_key | Builder pair | Mode doc |
+|---|---|---|---|---|
+| 1 | `github_url and language == "python"` | `python_github` | `_build_github_system_prompt` / `_build_github_prompt` | [Python brownfield](../modes/brownfield/01-python.md) |
+| 2 | `github_url and language == "java"` | `java_github` | `_build_github_java_system_prompt` / `_build_github_java_prompt` | [Java brownfield](../modes/brownfield/03-java.md) |
+| 3 | `github_url and language == "nodejs"` | `nodejs_github` | `_build_github_nodejs_system_prompt` / `_build_github_nodejs_prompt` | [Node.js brownfield](../modes/brownfield/02-nodejs.md) |
+| 4 | `language == "java"`, `microservices` | `java_greenfield_microservices` | `_build_java_microservices_system_prompt` / `_build_java_microservices_prompt` | [Java microservices](../modes/greenfield/08-java-microservices.md) |
+| 4 | `language == "java"`, else | `java_greenfield_monolith` | `_build_java_system_prompt` / `_build_java_prompt` | [Java monolith](../modes/greenfield/07-java-monolith.md) |
+| 5 | `language == "nodejs"` | `nodejs_greenfield` | `_build_nodejs_system_prompt` / `_build_nodejs_prompt` | [Node.js greenfield](../modes/greenfield/06-nodejs.md) |
+| 6 | `python_framework == "bottle"` | `bottle_greenfield` | `_build_bottle_system_prompt` / `_build_bottle_prompt` | [Bottle](../modes/greenfield/05-bottle.md) |
+| 7 | `python_framework == "flask"` | `flask_greenfield` | `_build_flask_system_prompt` / `_build_flask_prompt` | [Flask](../modes/greenfield/04-flask.md) |
+| 8 | else, `framework == "django"` | `django_greenfield` | `_build_django_system_prompt` / `_build_django_prompt` | [Django](../modes/greenfield/02-django.md) |
+| 8 | else, `framework == "tornado"` | `tornado_greenfield` | `_build_tornado_system_prompt` / `_build_tornado_prompt` | [Tornado](../modes/greenfield/03-tornado.md) |
+| 8 | else, else | `fastapi_greenfield` | `_build_system_prompt` / `_build_prompt` | [FastAPI](../modes/greenfield/01-fastapi.md) (the default) |
+
+The LangSmith `mode` tag and telemetry framework tag are derived from this same `mode_key` — one classification, consumed twice, so the two can't drift apart the way an independently-hand-rolled second chain would. STEP numbers are **not aligned across modes** — greenfield's STEP 11 is "syntax check," brownfield's STEP 11 is "commit changes." Don't assume a STEP number means the same thing in two different mode docs.
+
+## Python brownfield's profile substitution
+
+`python_github`'s builder isn't framework-specific — it serves fastapi/django/flask/bottle/tornado clones through one shared template, parameterized by `_python_framework_profile(web_framework, free_port)`: a flat dict (~15 entries — persona, start command, health paths, ORM block, query-param block, etc.) interpolated throughout. `bottle` falls through this profile to the FastAPI entry (harmless — still Python-shaped). `nodejs` does **not** fall through here — it has its own dedicated builder (see [Node.js brownfield](../modes/brownfield/02-nodejs.md)), because the shared template hardcodes Python mechanics (`pip install`, `pytest`, `.venv`) in ~15 places outside the substitutable profile.
+
+## Deliberately deferred: the unwired orchestrator layer
+
+`prompts/targets/*/orchestrate.py` (`execute()` → `TargetOutput`) plus a `Target`/`dispatch_target`/registry abstraction implement a clean `Target.execute()` pattern that could replace the dispatch above — but the live pipeline never calls it; it dispatches through the `_build_*` functions directly. This layer is exercised only by a standalone dev consistency check, not a real job. **Out of scope for this spec** — wiring it in would mean rewriting the live pipeline's dispatch body itself, a materially larger change than the fixes and consolidations documented here. See [Known Gaps](08-known-gaps.md).
+2026-09-28 10:05:12,577 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+2026-09-28 10:05:12,675 INFO deepagent.transcript: [ai] tool_calls=[read_file({'file_path': '/modes/greenfield/07-java-monolith.md', 'offset': 0, 'limit': 300})] [{'id': 'rs_073ef31e7a24e662006aba3bd783a887d29aeaab7797cd13c7', 'summary': [], 'type': 'reasoning', 'content': [], 'encrypted_content': 'gAAAAABqujvYQYMPMAzBgL4z7Ggu6k2rEtIb5lFhassCXHv-GlJGNZ6y92JPwikrrv3NZrXzcI7yfcJWn1hTRu-s7oAs9Ot-H541bi7xDCEZL7_GCTfdz-Te8xTUW7KRjLT_GuNSkKUarkOzC3y88Vrhkslm3BLtIWpQWJbIA8hZ2VNJO7eaM4aSknGAv5fTBRt88fbjJJJPLNcRj4tehiJ_dzJuYcIpG8C9n9-Uilm57X634K_dw7grIpxOAeQp41hrDXq4AKgP27ijWwSGGx6O3t6RHXRqeCadUkayL_0ZNfgu3RaqjQmKYta8ps9k3i0sfiOrTJqvxIGL4Er1IMlWQrvsBJHTffTIvV-6KULE1ToqkzHyQ9nShrtgYW9wH-WRm6846xeGeRnzjAK69JgQ1OhVhSNVon8n4ngepxwOSG-xmV7wtfwuxbBADrwwG5_YzQpMFnTgTmzPJpr46fuZOvndEbR16OC3qERwlzAWzWhs_Qbnpf-7NCvbq1us5_rggkgp_xTBRGLGQeQoUeVEc3k6vtvbETySUpju5azLhruupusw-OqXJ3J6NGa2RFGWMPGFHj-W59XKTxFU-lCxIW4Y9ucEmbxDHHGu2IrSwCGdqzo1MlmbbYwOnThno2OVAugZzK-qAJMTFhu6jzw2CfKHoPajNiT9Q7ptNAwaN-DBPSeBub-x5_E6tep-EdBzrvN2dUSF5fjIe3mickoKjfv2uFgu41a14DbKii5fAxx0lgBMVNW7ITFxG0AQiPf7TzLPSU7zgr6VReJz7JG-Dz2WniAIifd0Tsb-BuRwSGPbMh_C6R2wM1sX7DpLCXN3oeUraNFAxN8CoT0Sv4tYzGsV7aAbeiJBrFBjlq9ZPm6gnV3NTnfuQQSMe2amOIOWxQYNA2fVDaSgG6llk1MCxPsAfWwGlGjyQi1WnGrODgR78KyitMT048kQlA_aZ4gxNJ7uuKPZ3NkfWaEe3AfoZOt5Mmv3Ap5V-aQTQIcYzjbbOA7YVpbIfBfsfkTQMkDTTyI4wwZsiTk9Himl8sWdaD149BGx4SaVePPYmF0P8VX9tk7xaNI7etFgNCc2ulHmBVFL8qsTX-LP7yJb-90zGN_gu6Xf3t8EPAhQa1IXGmNxrgn5KAA5KT6xFwKRMsahXHeNnW0tNSQhF6sedKSWWT40gJ-6O2OK5r3FRDLXp9eL6is2ycIzWbDkAKiSw32x4RUjFLwz-JynpAsH5-lau9Rl9kS6-ZyhWyfP_pXIx7fyKl_deI0umMeDPxjFhi-lYbpGFZ1NIpZMChx4m3q80p_9iBxQJ5o3ni7N6cHwYX_JtvWYyD48XusciP26LegZYSNkr69cCyqsE_ncqEJjVmQkIgDdrignQGC3-_MWhOcE24CEsz2gT-LC1jYNFGFYph9nurSfTXdhoKhGnk29U4Mch15ePqeJN7kK8Zqha-E9cZcvqDgr8YevC48ByNr6JzD4wPU-z-Tl26FSVAyMM5knKlljP_ym2FVmAx-7AgjGsT1fYrY='}, {'arguments': '{"file_path":"/modes/greenfield/07-java-monolith.md","offset":0,"limit":300}', 'call_id': 'call_M6Z9WUVe8bDhrKCRhWI8N36k', 'name': 'read_file', 'type': 'function_call', 'id': 'fc_073ef31e7a24e662006aba3bd822c887d290535c4a61db94a5', 'status': 'completed'}]
+2026-09-28 10:05:12,683 INFO deepagent.transcript: [tool] (name=read_file) @@ lines 1-56 of 56 @@
+# Java monolith greenfield
+
+Nothing is pre-scaffolded here — the agent writes everything itself. (Contrast [Java microservices](08-java-microservices.md), which pre-scaffolds infra modules before the agent's first token.)
+
+## Build tool handling
+
+One build-tool profile call drives the manifest name, build-check/package commands, jar glob, and a wrapper-bootstrap fragment, threaded through STEP 2 (build config), STEP 7 (start scripts), STEP 10 (build check), STEP 10.5 (linting), and the fix loop. All three build tools — Maven, Gradle, and Ant — are supported here (unlike microservices, where Ant is rejected at intake, see [Request Intake](../../reference/02-request-intake-and-config.md)).
+
+## STEP sequence
+
+Rendered before `EXECUTION`: persona, formatting guard, database/version/port blocks, shell rules, sandbox restriction, config targets, package structure.
+
+| Step | Condition | What it does |
+|---|---|---|
+| 1 | always | Entity design — JPA entities or Mongo documents. Kafka design note if gated. |
+| 2 | always | Build + DB config: manifest, `application.properties`, mandatory compiler-release pin, springdoc + forwarded-headers config. Kafka build-config note if gated. |
+| 2a | build-tool conditional | Wrapper bootstrap (Gradle / Ant+Ivy / Maven — exactly one renders). |
+| 3 | always | DTOs. |
+| 4 | `auth.method` | Auth — see [Auth](../../capabilities/auth.md). |
+| 5 | always | Repositories + services + controllers + main; mandatory Swagger annotations; pagination inline — see [Pagination](../../capabilities/pagination.md); JPA correctness rule (use the save call's returned id, never call the getter on a transient entity). |
+| 5.5 | Kafka gated | Producer/consumer wiring. |
+| 6 | always | Seed data. |
+| 7 | always | Infra: start scripts, Dockerfile/compose/Makefile per flag — the start script is what STEP 11's own boot verification uses (see [Boot verification](../../capabilities/reports-and-deploy.md#boot-verification-every-mode-every-language)); Dockerfile/compose are deliverables only, never the harness's own verification mechanism. |
+| 7b | CI flag | CI workflow. |
+| 8 | always | (no-op — falls through to 9). |
+| 9 | always | README. |
+| 10 | always | Build check, fix all compile errors. |
+| 10.5 | linting gated | Linting (checkstyle) — see [Build, Quality & Testing](../../capabilities/build-quality-and-testing.md). |
+| 11 | `testing_framework` | Compilation verification / API testing (curl) / JUnit 5 + Mockito (the documented default) — see [Build, Quality & Testing](../../capabilities/build-quality-and-testing.md). |
+| 12 | `testing_framework` | Skip / baseline test summary. |
+| 13 | always | Summary. |
+| 14 | `testing_framework` | Skip / iterative fix loop, max 5. |
+| 15 / 15.5 | always | Reports (xlsx + docx), email sub-step right after. |
+| 16 | always | Final summary — the true stop condition. |
+
+## Hard safety rules
+
+- Port 8080 protection: "NEVER KILL PORT 8080 — it may be used by other services." The app itself runs on its own allocated `{free_port}`, stopped via `$SERVER_PID` — this is a separate, unrelated port warning.
+- No brace expansion in shell commands.
+- Stop the server with `kill $SERVER_PID` only. No ngrok — tests run against localhost directly.
+- Confined to `output_dir`; this platform's own source must never appear in the generated project.
+- Config gating: no refresh/RBAC/websocket infrastructure unless the corresponding flag is set.
+- JPA correctness: never call the id getter on a transient entity.
+
+## Completion criteria
+
+Stop only when STEP 16's final summary has been printed. The fix loop (STEP 14) stops when no failures/timeouts remain and every skip is confirmed genuinely untestable, or after 5 iterations with no improvement. `completed` status is additionally gated on the xlsx report — see [Quality Gates](../../reference/07-quality-gates.md).
+
+## Capability hooks
+
+| Capability | Where it lands | Gate |
+|---|---|---|
+| Kafka | STEP 1 tail → STEP 2 tail → STEP 5.5 → STEP 11 (curl arm only) | `kafka_url` |
+| Auth | STEP 4, plus inline notes in STEP 5 and STEP 11 | `auth.method` |
+| Pagination | Inline in STEP 5 only | `api.pagination.style` |
+| Linting | STEP 10.5, checkstyle only | `linting_tool` |
+2026-09-28 10:05:14,651 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+2026-09-28 10:05:14,734 INFO deepagent.transcript: [ai] tool_calls=[read_file({'file_path': '/capabilities/auth.md', 'offset': 0, 'limit': 240}); read_file({'file_path': '/capabilities/build-quality-and-testing.md', 'offset': 0, 'limit': 260}); read_file({'file_path': '/capabilities/reports-and-deploy.md', 'offset': 0, 'limit': 280})] [{'id': 'rs_073ef31e7a24e662006aba3bd952e487d290f17c7ed36a77a7', 'summary': [], 'type': 'reasoning', 'content': [], 'encrypted_content': 'gAAAAABqujvaJfReLS1wqi04UYgnoAjoya2_KF5M313d52m4LQuhtrn-b70DUry37UKtaulg3bFJbhJRwaZfssWJv3i0iF8NKRoOJdaa_yHiO_uwlzIRrozulDsl2E2LAMY6h4n-Pn-XM536u4LkKNvB_H-VX-XPk6dNZYU2HV-qxxw6sgxIXKuyC06pErHk2DpJ6VZbIWZDzgq1OuXnB4_mL6Z_GijBOSG95uRUq0a3LN8lZLqiRSl9ySABD0W1jFxE-Lf1AUxLumJDLemOX0mIUDeZ-M2hN2mr5bYKlZY6pUztx5M5Vm6MPnhMFKepEXJ4wFirVYSzjPoNPpdEZz3ZK89AzY7Sj6qFSRsNIWzTCCGqMTbUvEaMrHF5KOZedrDks43Zb76bpd38Xx9YzaNPrUjctfV0X62OCc7U_OeB1Pmo9NeyJQE_jkFRzHVYoHSIBo8OoXLNg-JT-w2QKnCVBPC1yaOQV9O-rn5j6vJgAqWJEGWWhXs25vQWZQyVDAKrJgt0Oet-f8vSccVQgV0TAMNoqGrIWUs8Kz71pxdmZrnBi_g2Rgk48JgIj0tyoakBA7M7flA4PhiPPu9Ycfjes8TkgXpxAMqEvSPgeP0caReSTy4VrRvXUajlr8FJppNfhVIaptHy107eIa7oaf2y9oYWUpOufny3xG_dCFMlwVrkPhmo135odQnB5-_7pbJYAW9ImylHmuZFvNPPGlluejwYBDtqJpdCzyaA4exqVjQUsXPdjS7TzupaQ1jMG3VrnkfzYbPDFVPpiHa9c5RTCuIhz3_CWW_WYqLGQ5msxcjq7BBPQIfx8Vk2Yh0ilpzQOZjJyZiD-Xpx8YwnpVy48B_3GfAPbS41_pNkDCS8soewgvLRqRtwmeyvz4_laCwR8d7HYRwkxf0LY1WLk3BSn4pF3Z6CJ9Sd31LFtcoPsTxKvaOh0TVH235aLvn13bMCWTEu-0VRIp1YEW-AbXAfl6ZFdouI0_ccVfCBuHYiQPVScSNAvK9IrvXzKk_x9iRSYiPxhCwraj9KgEbhaZ8uJpquZittuIZVTgUHkoek2JTZ3K09MZeQrhF5b9v7r3kkeKH4h2hG830lIE7mDRLxUqBYJD96XYs0HIHOnrYZ3AHDF9sT5MEPcOKDV_1G8uSA-4VeiFQ-k8RegNB-PnrtVwPJjJuOsprE5n69wA_9BZDWVuB8NM0xxcLIP_HCFXTUFouP20dGhbTVwF1bC1r-4Vc1MZHeJyWBUkh2z_LE3dP-qnbCi4U-By_arV0ws9b2gG59jfKyn5XTaHXmFyDYNwFZ4r4l-TOpJFdRD9YRlJ_dfdz7plHSnhp5NGHc4khtBpd7lrX9'}, {'arguments': '{"file_path":"/capabilities/auth.md","offset":0,"limit":240}', 'call_id': 'call_cn2hcC46MpLG5hND2UApCxkE', 'name': 'read_file', 'type': 'function_call', 'id': 'fc_073ef31e7a24e662006aba3bda1eac87d2b9b04bea5a2e926b', 'status': 'completed'}, {'arguments': '{"file_path":"/capabilities/build-quality-and-testing.md","offset":0,"limit":260}', 'call_id': 'call_xwIUIKaexR6xc9LbZPYTrHOJ', 'name': 'read_file', 'type': 'function_call', 'id': 'fc_073ef31e7a24e662006aba3bda1ec887d29d5821e5215c1559', 'status': 'completed'}, {'arguments': '{"file_path":"/capabilities/reports-and-deploy.md","offset":0,"limit":280}', 'call_id': 'call_XdNKy7Nz0qqXnQjKXH7pZcWB', 'name': 'read_file', 'type': 'function_call', 'id': 'fc_073ef31e7a24e662006aba3bda1ed887d2b14322659d38c4f5', 'status': 'completed'}]
+2026-09-28 10:05:14,743 INFO deepagent.transcript: [tool] (name=read_file) @@ lines 1-65 of 65 @@
+# Auth capability
+
+Scaffolding-instruction text and auth-specific test-plan text for every framework family, branched on `auth.method` (`"jwt"` vs `"apikey"`), plus two shared framework-agnostic JWT sub-features: refresh tokens and RBAC. One function pair per framework family; Flask and Bottle already share one test-plan function, since their shapes are near-identical.
+
+| Framework family | Scaffold builder | Test-plan builder |
+|---|---|---|
+| FastAPI (reused by Python brownfield) | `_build_auth_step_block` | `_auth_test_plan` |
+| Django | `_build_django_auth_step_block` | `_django_auth_test_plan` |
+| Tornado | `_build_tornado_auth_step_block` | `_tornado_auth_test_plan` |
+| Flask | `_build_flask_auth_blocks` | `_flask_bottle_auth_test_plan` (shared with Bottle) |
+| Bottle | `_build_bottle_auth_blocks` | `_flask_bottle_auth_test_plan` (shared with Flask) |
+| Node.js/Express | `_build_nodejs_auth_blocks` | `_nodejs_auth_test_plan` |
+| Java monolith | `_build_java_auth_step_block` | Java JUnit/curl helpers, shared with microservices |
+| Java microservices | `_build_java_microservices_auth_step_block` | Same two Java helpers |
+
+Java brownfield surfaces auth as its own display section (a "REQUESTED CONFIG TARGETS" line plus a standalone "AUTH TARGET" block); Python and Node.js brownfield only steer test-plan wording.
+
+## What gets scaffolded
+
+- **apikey** (all 8 families): an `ApiKey` model/entity (hashed key, unique+indexed, name, active flag, timestamps; Java adds an expiry), a raw-key-hashing helper, a key-generation helper, a create/list/revoke management surface.
+- **JWT** (all 8 families): bcrypt password hashing, a generated secret written to the env file, never hardcoded.
+- **Refresh tokens** (`auth.jwt.refresh=True`): a distinct refresh vs. access claim, a separate longer expiry, a persisted+revocable refresh-token row, `/auth/refresh` and `/auth/logout` (logout must never touch the still-valid access token). Expiry comparisons use timezone-aware datetimes with a few seconds of clock-skew leeway.
+- **RBAC** (`auth.jwt.rbac=True`, or `auth.api_key.rbac=True` for Java apikey): a role field, baked into the token claim or resolved at key-lookup time; one reusable enforcement primitive returning 403 (never 401) on mismatch; a role is immutable once assigned. Spring needs a `"ROLE_"`-prefixed authority or every role gets 403 on every endpoint.
+
+## Admin-key protection scheme (apikey mode only)
+
+Every framework protects its own create/list/revoke `/api-keys` surface with a **separate admin credential** — those endpoints are never left open to any caller. One shared shape across all 8 families:
+
+> A separate `X-Admin-Key` header is checked, using a constant-time comparison, against an `ADMIN_API_KEY` value read from the environment. A mismatch or missing header is a 401 (not a redirect, not a 403). This gate protects key management ONLY — it must never guard business endpoints.
+
+Only the comparison primitive and read syntax vary by language:
+
+| Family | Compare primitive | Wiring |
+|---|---|---|
+| FastAPI | `secrets.compare_digest` | `Depends(get_admin_key)` |
+| Django | `secrets.compare_digest` | `IsAdminApiKey(BasePermission)`, applied to the ApiKey viewset only |
+| Tornado | `secrets.compare_digest` | `get_admin_key(handler)`, called first in every `ApiKeyHandler` method |
+| Flask | `secrets.compare_digest` | `@require_admin_key` decorator |
+| Bottle | `secrets.compare_digest` | `require_admin_key` decorator |
+| Node.js | `crypto.timingSafeEqual` (both sides sha256-hashed first, to avoid a length-mismatch throw on raw values) | `adminAuth` middleware |
+| Java monolith | `MessageDigest.isEqual` | Checked first in every `ApiKeyController` method |
+| Java microservices | `MessageDigest.isEqual`, key generated per service, exported as a real env var — never written into that service's properties file | Same as monolith |
+
+Java's Spring `SecurityFilterChain` wiring: `.requestMatchers("/api/v1/api-keys/**", "/actuator/health", "/docs/**", ...).permitAll().anyRequest().authenticated()` then `.addFilterBefore(apiKeyFilter, ...)`. Microservices warns explicitly against a second `CorsConfig` bean — it doubles the `Access-Control-Allow-Origin` header, which browsers reject outright.
+
+## Test plans
+
+One shared narrative across all 8 families, only the tool syntax differs:
+
+- **apikey**: admin creates a throwaway key via the admin header, then the raw key is sent as the *business* header (never `Authorization: Bearer`, never `X-Admin-Key`) on entity CRUD; also verify a missing/wrong header returns 401.
+- **JWT**: register → login → capture token → CRUD with the token.
+
+Tool delta: curl script, pytest/test-client fixture, Tavern YAML, or (Java) JUnit integration-test additions + curl lines — same narrative, different syntax. FastAPI additionally gets Schemathesis, with a session-scoped fixture per method.
+
+## Gating
+
+- `auth.method`: `"jwt"` (default) vs `"apikey"` selects the whole branch.
+- `auth.jwt.refresh` / `auth.jwt.rbac` / `auth.api_key.rbac` (Java apikey only): independent feature gates.
+- `auth.api_key.header_name`: the **business-endpoint** header name is configurable; `X-Admin-Key` is always the literal string, never configurable.
+- `auth.api_key.expiry_minutes` (Java only): an expired key is treated identically to an inactive one — no distinct HTTP status.
+
+## Greenfield vs. brownfield
+
+- **Greenfield**: scaffolds new auth from scratch, per the tables above.
+- **Brownfield** (all three languages): never scaffolds new auth. `auth.method` only picks which test-plan wording to write for whatever auth the cloned repo already has, and for Java is also displayed as its own config-target section.
+2026-09-28 10:05:14,743 INFO deepagent.transcript: [tool] (name=read_file) @@ lines 1-73 of 73 @@
+# Build quality, formatting, and the fix loop
+
+Covers formatting, linting, test generation/execution, and the self-correcting fix loop — the capabilities deciding how thoroughly a project is verified before the agent stops, and how it self-corrects when verification fails.
+
+## Formatting guard
+
+One shared block, injected into every one of the 11 target builders: *"Write real, properly indented multi-line files — NEVER collapse content onto a single line, even a short config file. A literal `\n` (backslash + "n") is NOT a line break."* Exists because generated projects were observed shipping files collapsed onto one line — the model imitating a prompt's own inline shorthand as literal file content.
+
+## Linting
+
+Normalized before it ever reaches a prompt builder: `normalize_linting_tool(tool, language, framework)` degrades an unrecognized value to `"none"` (step skipped) with a logged substitution event — the same shape as the testing-framework model below. This closes the old failure mode where an unrecognized value silently produced no lint step at all, no error, no log.
+
+Recognized per ecosystem:
+
+| Mode(s) | Recognizes | Step # |
+|---|---|---|
+| FastAPI, Django, Tornado (greenfield) | `ruff` | 11.5 |
+| Flask, Bottle | `flake8`, `ruff` | 10.5 |
+| Node.js greenfield | `eslint` | 10.5 |
+| Java (monolith, microservices, brownfield) | `checkstyle` | varies |
+| Python brownfield | `ruff` | 5.5 |
+| Node.js brownfield | `eslint` | 5.5 |
+
+Node.js brownfield now has its own recognized set (it used to route through the Python brownfield builder, which only knew `ruff`, so it couldn't lint at all — fixed by giving it the same dedicated builder treatment as its other steps; see [Node.js brownfield](../modes/brownfield/02-nodejs.md)).
+
+## Testing framework resolution
+
+One normalizer resolves `testing_framework` before any builder runs, closing two separate failure modes that used to exist independently:
+
+- **Silent step loss** (Flask/Bottle/Node.js greenfield, Python/Node.js brownfield): an unrecognized value used to leave the entire testing STEP absent from the rendered prompt, with no event — and because the completion gate still applies whenever `testing_framework != "none"`, that produced a job gated on a report the agent was never told to write.
+- **Generation/execution disagreement** (FastAPI): the generation step and the execution step used to recognize different sets, so an unrecognized value could get test files written that were never run.
+
+Now every mode's generation and execution steps consult the same already-resolved value. An unsupported request (e.g. `schemathesis` on a framework with no OpenAPI schema by default) degrades to `curl` with a logged substitution event — the model both Django and Tornado already used correctly.
+
+| Language / framework default | Value |
+|---|---|
+| Java microservices | `junit` |
+| Java monolith/brownfield, Django, Flask, Bottle, Node.js | `curl` |
+| FastAPI, Tornado | `none` |
+
+`"none"` skips the server-start step entirely — the two async Python frameworks keep that default for historical compatibility, everything else defaults to at least a boot-and-probe. That one default is the biggest determinant of whether the completion gate applies to a given job at all (see [Quality Gates](../reference/07-quality-gates.md)).
+
+## Java testing
+
+Shared JUnit/curl blocks used by both Java greenfield modes and Java brownfield's fix-loop: unit-test additions, integration-test additions (+ an auth-aware variant), an enforcement note explicitly rejecting "Tests run: 0" as a pass, endpoint-test additions, and a microservices-only inter-service test addition that greps for cross-service call sites and requires a real test hitting the already-running callee.
+
+## Fix loop
+
+The self-correction contract, shared across modes:
+
+- **Iteration cap**: up to 5 iterations everywhere it applies. Flask/Bottle's loop text is flat ("repeat until all pass") rather than itemizing the cap explicitly, but the same 5-iteration ceiling governs it.
+- **Recall-first discipline**: wherever MemClaw tools are wired, the first action on any failure MUST be a recall of similar past fixes before forming an own diagnosis; a confirmed fix is recorded once per distinct bug.
+- **Stop conditions**: zero failures/timeouts remain and every skip is confirmed genuinely untestable, OR every remaining failure has a concrete external cause, OR the iteration cap is reached with no further reduction.
+- **Java's three-arm dispatch** (shared by both Java greenfield modes): `"none"` → compile-check only; `"curl"` → inline curl, no `.sh` files, restart by PID; else (`"junit"`, the real default for both) → JUnit 5 + Mockito with the "Tests run: 0 is not a pass" enforcement note. All three arms boot the app itself the same way — the shared start-script mechanism in [Reports & Deploy](reports-and-deploy.md#boot-verification-every-mode-every-language), restarted/re-tested by PID each fix-loop iteration — never by rebuilding and re-`up`-ing a per-service container.
+- **Microservices scoping**: the fix loop restarts and re-tests only the failing module, never a batched multi-module command — a batched invocation makes it easy to silently drop one module's failures.
+- **Tornado's fix-loop text** no longer carries Django's "re-run migrations if a model changed" line unconditionally — that line is now conditional on the ORM actually having a migrations step, since Tornado has none.
+
+## The completion-gate contract (what report generation actually specifies)
+
+Every mode's report-generation step produces the same workbook shape — see [Reports & Deploy](reports-and-deploy.md) for the mechanics, this is the contract itself:
+
+- Columns: `#, Method, Endpoint, Description, Status Code, Pass/Fail, Reason` (Java microservices prepends a `Service` column).
+- Pass/Fail must contain the literal word `PASS` (case-insensitive `PASSED` also tolerated — nothing else counts).
+- PASS = a 2xx response, or a deliberately-tested rejection 4xx (e.g. 401 on a protected route with no token).
+- FAIL = a should've-succeeded 4xx, any 5xx, a refused connection, a timeout, or a non-zero test-script exit.
+- SKIPPED is recorded as FAIL with `Reason = "Skipped: <exact reason>"` — there is no separate SKIPPED status the gate treats leniently.
+- One row per real, individually-verified check only — no synthetic or aggregated rows. Most rows are a real HTTP request; a genuine non-HTTP verification (a Kafka consumer actually joining its group and consuming a message, a message-broker delivery check, a JUnit suite's own result) is also a legitimate row, but never dress it up as an HTTP call to fit the shape: leave Status Code blank (or `N/A`) — there is no HTTP status to report — and leave Endpoint blank too rather than putting a topic/queue/suite name where a URL path belongs; put exactly what was actually observed (e.g. "consumer joined group and consumed 1 message") in Description/Reason instead.
+- A row's Status Code and Pass/Fail must come from a response object the report script itself received when it made that request — never authored by predicting what the implementation should return. This holds regardless of tech stack, greenfield or brownfield: a row with no real request behind it is a contract violation even if its Pass/Fail value happens to be correct.
+- **Never drop a previously-recorded unique test case.** If this job's report-generation step runs more than once in the same job (e.g. an interim check during the fix loop, then the final write), each run must preserve every row already established — re-test it and update its Status Code/Pass-Fail/Reason if it's retestable this run, otherwise leave it exactly as last recorded — and add newly-discovered cases on top. Never regenerate the workbook from a fresh, independent rediscovery of endpoints/checks that silently drops a row this job already established just because this particular run didn't happen to re-detect it; a shrinking report is as much a contract violation as a fabricated row. This also protects the platform's own report-repair fallback, which reconstructs `api_test_report.xlsx` from this same script's `test_results.json` write when the xlsx write is missing — see [Task Pipeline](../reference/06-task-pipeline.md) — so that file must carry the same accumulated, never-shrinking set.
+- **Only include a test case a correct implementation can actually pass.** Don't manufacture a foregone-conclusion FAIL by testing a route in a setup that structurally can't succeed regardless of whether the code is right — see [Reports & Deploy](reports-and-deploy.md#boot-verification-every-mode-every-language) for the specific case (a downstream-dependent route probed before its dependency is up) and the fix (sequence or drop that probe, don't report it as a finding about the app).
+- If the thing a row would report on never actually ran — the server never booted, the test run never executed, the curl transcript was never captured — that row is FAIL with `Reason = "Skipped: <exact reason>"` per the rule above. A failed boot or failed test run is never a reason to fall back to predicted rows instead of real ones; see [Reports & Deploy](reports-and-deploy.md)'s boot-verification section for what happens upstream of this.
+- **Omitting a row is not a safer alternative to fabricating one — write the Skipped row, don't leave it out.** Confirmed failure mode: never attempting the full-stack boot at all (not even a failed attempt — genuinely never issuing the start-script call), then reasoning "I won't fabricate HTTP/Kafka rows for something I never ran" and simply not writing them, leaving a workbook containing only JUnit-suite rows, every one `PASS`. That workbook reads as a clean, complete pass to anyone — or any automated gate — reading only the Pass/Fail column; it is *more* misleading than an honest `Skipped: <exact reason>` row would have been, not a more conservative choice. For Java specifically, this matters even on the `"junit"` arm: per [Java testing](#java-testing) above, all three arms boot the app the same way, so "the JUnit suite passed" is never itself a substitute for the endpoint/Kafka rows the boot-verification phase was supposed to produce — if that phase never ran, its rows still belong in the workbook, marked FAIL/Skipped with a real reason, not silently absent.
+- Before writing a single `Skipped: ...` row, confirm to yourself that the start-script call in [Reports & Deploy](reports-and-deploy.md#boot-verification-every-mode-every-language) was actually issued (up to its 3-attempt retry limit) — not merely that infra came up, or that something else went wrong while you were getting ready to test. A `Skipped` reason must name how many boot attempts were made and quote the last captured error; a reason that only states the outcome, with no attempt count or captured error, reports a step that was never tried, not one that failed, and is itself a contract violation. Getting distracted by an unrelated failure (a helper script blocked for its own reasons, a slow container, a wrong path) and quietly writing every row `Skipped` instead of returning to actually attempt the boot is the single most common way this rule gets violated in practice.
+2026-09-28 10:05:14,743 INFO deepagent.transcript: [tool] (name=read_file) @@ lines 1-64 of 64 @@
+# Reports, boot verification, and CI/infra scaffolding
+
+The completion-gate *contract* (workbook columns, PASS/FAIL rules) is in [Build, Quality & Testing](build-quality-and-testing.md), shared with the fix loop. This file covers the mechanics: how the reports actually get written, how a server gets booted and re-booted, and optional unit-test/CI scaffolding.
+
+## Reports — one canonical mechanism per ecosystem, used everywhere in it
+
+Two artifacts, always generated together: an xlsx test report and a docx summary. **Greenfield**: STEP 15/15.5 for FastAPI/Django/Tornado/Java monolith, STEP 16/16.5 for Flask/Bottle/Node.js, STEP 11/11.5 for Java microservices — mode-local numbers don't need to match, see [Prompt Architecture](../reference/04-prompt-architecture.md). **Brownfield**: STEP 12/12.5, plus a deploy-script step at STEP 13.
+
+- **`api_test_report.xlsx`** — one canonical, verbatim script embed per ecosystem, not a mix of embedded-script/prose-description/reimplementation:
+  - **Python/openpyxl** script, used by every Python-family greenfield mode, both Java greenfield modes, and both Python and Java brownfield. (Java projects use this Python throwaway script too — it's a report-generation tool, not part of the generated app, so the app's own language is irrelevant to it.)
+  - **Node/exceljs** script, used by both Node.js greenfield and Node.js brownfield — promoted from what used to be a Node.js-brownfield-only reimplementation to the shared mechanism for both Node modes, closing the old bug where Node.js greenfield instead got the Python script's prose (telling it to `pip install` and run `python3`).
+  - Small per-caller deltas only: extra directories to skip when scanning the tree (Java adds `target/`, `build/`, `.gradle/`), and whether the source-of-truth for endpoints is a curl transcript or a test run.
+  - In every case, the script itself is the thing that issues each request (over HTTP, against the booted server) and reads the row's Status Code/Pass off the response it gets back — it is a live test runner that happens to also emit a workbook, not a template that gets filled in from something else. See [Build, Quality & Testing](build-quality-and-testing.md)'s completion-gate contract for why this isn't optional.
+- **`project_report.docx`** (greenfield) / **`changes_report.docx`** (brownfield, parses the change log + the xlsx) — python-docx, uniform across every mode including Node.js brownfield, which used to be the one brownfield mode with no docx step at all.
+
+Both helper scripts are one-off: written, run, verified to exist, then deleted — never meant to survive into the delivered project (the push step's `.gitignore` hardening excludes them explicitly as a backstop). Both artifacts (`api_test_report.xlsx`, `project_report.docx`/`changes_report.docx`) land under a `tests-artifacts/` subfolder of the delivered project, not its root, in every mode — greenfield and brownfield alike — so the root of a delivered project shows application code first, not generation-time tooling output.
+
+**Email placement**: the email-report step is now positioned in every mode right after the docx step, since it attaches the xlsx — it no longer textually precedes the artifact it references.
+
+## Boot verification (every mode, every language)
+
+One mechanism, uniform across brownfield and greenfield alike, and across Python/Node.js/Java: the generated application's **own** services are started via a **start script that launches them as backgrounded processes**, tracked by PID, and killed by PID — never by bringing up per-service containers via `docker compose up --build`.
+
+- **Where the start script actually runs**: natively via `execute` when the stack's runtime is on the host (this sandbox has Python natively, but not Node.js or a JDK — see [skills/docker-toolchain](../skills/docker-toolchain/SKILL.md)); otherwise as one `docker_exec` call whose `command` *is* the start script — build once if needed, launch every service backgrounded inside that same call, poll health, then either test from inside that same call (client and server share one container, so plain `localhost` reaches them) or keep the processes alive long enough for a host-side test/report script, via `docker_exec`'s `ports` argument publishing whatever ports that script needs. Because the container is discarded (`--rm`) the moment the call returns, a background process cannot outlive the call that started it — the command itself must start, wait on, test, and stop them.
+- **Infra dependencies** (a database, a broker, a cache — anything not generated code) are the one thing that legitimately still runs via `docker compose up`/`down` — see [Container image policy](#container-image-policy-docker-compose--dockerfiles-every-mode) below. When the app's own start script needs to reach that infra by its compose service name, the `docker_exec` call above passes `network` set to that compose project's network.
+- **Infra being up is never a substitute for the app's own boot.** Bringing up a database/broker container and then moving straight to report-writing — without ever issuing the start-script call in step 3 below — is a real, observed failure mode, not a hypothetical one: it produces a report that reads as an honest "Skipped: boot was not completed" but actually reflects zero boot attempts rather than a genuine failure. Infra-up is a *precondition* for step 3, never a stand-in for it.
+- **The generated `Dockerfile` per service, and any app-service entries in `docker-compose.yml`, are flag-gated deliverables** for whoever deploys the finished project (per-mode "Infra" STEPs, e.g. Java monolith's STEP 7, Java microservices' STEP 5.5) — real and correct, but never the mechanism this harness's own verification depends on. A job never fails, retries, or blocks on whether that Dockerfile happens to build; it only depends on the start script succeeding.
+- **Never probe a downstream-dependent route before its dependency is up.** In microservices mode especially, a route that legitimately calls another service (a gateway routing to a business service, a service calling a peer) will correctly 5xx/refuse if tested in isolation, before that peer is booted — that failure describes the test's own setup, not the generated app, and reporting it as a `FAIL` row manufactures a foregone-conclusion failure rather than a finding. The start script must bring up every service this route depends on (in dependency order — see each mode's own multi-service boot ordering, e.g. Java microservices' Eureka → business services → gateway last) before that route is exercised; if a mode's test step still needs an isolated single-service probe for some other reason, that probe's result is not a substitute for testing the route with its real dependency running, and must not be the row the completion-gate contract's Pass/Fail column reflects for it.
+
+Runtime steps, uniform across every mode:
+
+1. Kill any existing instance of the app's own processes (by previously-recorded PID; never a broad port-kill beyond the app's own allocated ports).
+2. When running via `docker_exec` (runtime not on the host): before anything else in that call, run the detect-then-install idiom in [skills/docker-toolchain](../skills/docker-toolchain/SKILL.md) for whatever verification client the image doesn't ship — `curl` is never preinstalled in the images this harness uses, but which package manager is actually present varies by image, so detect it rather than assuming. Skipping this step is what produces `Reason = "Skipped: ... required client tool unavailable"` rows below — that reason is an avoidable dependency gap, not a legitimate skip, and must not recur.
+3. Start the start script backgrounded (natively, or via the `docker_exec` pattern above). **This call is mandatory, not optional, and "Skipped" is never a substitute for making it.** Every one of the 3 retry attempts in step 6 below means this call was actually issued that many times — not that the agent reasoned about why it might fail and decided against trying. If anything else goes wrong while preparing for or wrapping up verification — a report-writer helper script failing for an unrelated reason (blocked by a host security policy, a missing package, a wrong working directory), a slow infra container, an unrelated tool error — that is a problem to solve or route around, never a reason to abandon this step and fall through to writing Skipped rows. Resolve the distraction (switch tool, fix the script, wait longer) and come back to this step; do not let it stand in for a boot attempt that never happened.
+4. Poll health up to 120s (Python/Node.js) / 180s (Java).
+5. On success: kill the boot-verify process once verification is done — a live deploy tunnel (where one exists) re-runs the start independently, so killing here is correct, not wasteful.
+6. On failure: diagnose with captured stderr, retry up to 3 attempts total, then continue anyway — a failed boot-verify is logged, not a hard stop. "Continue anyway" means continue the deploy/report pipeline, not fabricate the report: every endpoint row whose source-of-truth depended on this boot is still FAIL with `Reason = "Skipped: <exact reason>"`, per [Build, Quality & Testing](build-quality-and-testing.md)'s completion-gate contract — a boot-verify failure here is exactly the case that rule exists for. A missing client tool (step 2) is not one of these legitimate failure causes; treat it as a bug in the start script and fix it, not a reason to skip. `<exact reason>` must itself prove an attempt happened: name the attempt count (e.g. "3/3 attempts") and quote the actual captured stderr/exit code from the last one — a reason that only describes an outcome ("boot was not completed in this environment") with no attempt count or captured error attached is indistinguishable from never having tried, and must be treated as a contract violation, not a legitimate skip.
+7. **Tear down this job's own infra containers — `docker_compose(workdir, "down")` — before the final summary. This is mandatory whenever step 3 or the fix loop ever ran `docker compose up` for this job's infra, not optional, and not something to leave for "later" since there is no later.** A missing teardown is a real, observed failure mode, not a hypothetical one: infra services bind fixed, conventional host ports (a database's, a broker's — e.g. Kafka's `9092`, Oracle's `1521`), not a per-job dynamically-allocated port the way the app's own services get — so a container left running after one job silently breaks the *next* job's boot verification with a port-bind conflict at container startup, which then cascades into unrelated-looking timeouts and FAIL rows for a completely different project. That failure is easy to misdiagnose as a code or infra problem in the job that actually failed, when the real cause is a previous job's uncompleted cleanup. Tearing down is the same `docker_compose(workdir, "down")` call regardless of how boot verification went — success, retries exhausted, or anything in between.
+
+Node.js brownfield gets the same retry loop as Python/Java — it used to just write and `chmod` the script with no runtime check at all.
+
+## Container image policy (docker-compose / Dockerfiles, every mode)
+
+Every image a generated project's `docker-compose.yml` or Dockerfile pulls — a database (Oracle, Postgres, MySQL, MongoDB, ...), a broker (Kafka, RabbitMQ, ...), a cache (Redis, ...), or anything else infra-shaped — must be freely pullable: no paid tier, no registry login, no vendor account. This is a target-design rule, not a harness quirk: a generated project that only boots for someone who happens to have paid registry credentials is broken for everyone else who tries to run it.
+
+- **Oracle**: use `gvenzl/oracle-free` (or `gvenzl/oracle-xe` for an older target) from Docker Hub, never `container-registry.oracle.com/database/...` — the official Oracle registry requires an authenticated login and fails boot verification outright with an HTTP 401, which is not a fixable error, just the wrong image.
+- The same test applies to every other engine/broker/cache choice: if pulling the image a project's compose file names would prompt for credentials or a paid plan, it's the wrong image for that role — substitute the nearest free, unauthenticated equivalent instead of accepting the failure downstream (and letting the completion-gate contract above turn every dependent row into a boot-failure `FAIL`).
+- When `database.engine` (or an equivalent config field) names a vendor whose free image differs from its paid one in meaningful ways — a smaller feature set, a different default port, a different startup/readiness signature — note that substitution once in the mode's own STEP output rather than silently pretending it's the vendor's full paid product.
+
+## API run / test execution (greenfield)
+
+Covers the actual test-execution instructions once test files exist, for FastAPI, Django, and Tornado. FastAPI's curl branch enforces ngrok-first ordering (start ngrok → patch env → start server → run tests — never reversed). Django and Tornado share a start-server helper (backgrounded, logged, any HTTP status counts as "up") and both warn against foregrounding `start.sh` or waiting on the server PID combined with a kill, since their dev servers never return control to the shell. FastAPI additionally writes an Azure-DevOps-deferred Dockerfile once every test has passed, requiring `EXPOSE 8000` (Container Apps' fixed target port, independent of the job's allocated port).
+
+Flask, Bottle, and Node.js run their own test-execution text as part of their testing-framework step instead (see [Build, Quality & Testing](build-quality-and-testing.md)). Brownfield doesn't use this section either — each brownfield mode's own server-start-and-test step is self-contained. Neither Java mode has its own test-execution prose at all; both point at the "Boot verification" section above for the mechanics (start script, never `docker compose up --build` for the app's own services) and at [Build, Quality & Testing](build-quality-and-testing.md#java-testing) for the JUnit/curl content itself.
+
+## Optional infra scaffolding (greenfield)
+
+Three independent, flag-gated additions, available to FastAPI/Django/Tornado (not Flask/Bottle/Node.js/Java):
+
+- **Unit tests**: pure-logic tests (validators, calculations, model methods), no running server, explicitly separate from the API-level suite. Django's variant marks DB-touching cases appropriately for its test runner.
+- **CI workflow**: writes a CI config — checkout, language setup, install, a compile/check scan, plus a unit-test step if unit tests are also enabled. Self-contained — no secrets or external services required.
+- **Azure DevOps Dockerfile deferral**: when Azure DevOps is enabled, FastAPI's normal Dockerfile write is replaced with a note deferring it to the API-run step above, since the smoke-tested Dockerfile Azure DevOps needs is a different shape than the plain one would otherwise produce.
+
+Every one of these flags is honored exactly as requested — a mode that doesn't explicitly gate on one of them silently doesn't offer it. Check what a new mode gates on before assuming it inherits these for free.
+2026-09-28 10:05:33,278 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+2026-09-28 10:05:33,412 INFO deepagent.transcript: [ai] {"project_name":"job-d559a533-f213-4744-9e90-c578859a7a58","task_prompt":"Build the project named `job-d559a533-f213-4744-9e90-c578859a7a58` as a greenfield Java monolith REST backend for enterprise HR management.\n\nBefore implementing anything, read these instructions:\n- `/aisdlc/modes/greenfield/07-java-monolith.md`\n- `/aisdlc/capabilities/auth.md`\n- `/aisdlc/capabilities/build-quality-and-testing.md`\n- `/aisdlc/capabilities/reports-and-deploy.md`\n\n## Fixed technology stack\n- Language: Java 21.0.12.1\n- Framework: Spring Boot 3.4.0\n- Build tool: Gradle 8.11.1\n- ORM: Spring Data JPA with Hibernate 6.6.2\n- Database: MySQL 8.4.3\n- Messaging: none requested\n- Authentication: JWT bearer tokens with BCrypt password hashing\n- Authorization: exactly the `HR`, `MANAGER`, and `EMPLOYEE` roles; use Spring Security `ROLE_` authorities\n- API conventions: JSON REST APIs under `/api`, validated request bodies, appropriate HTTP status codes, and structured JSON errors for validation, missing-resource, authentication, authorization, and business-rule failures\n- Infrastructure to generate: externalized MySQL, JPA, JWT, and server configuration in `application.yml`; do not invent additional broker, cache, or messaging infrastructure\n- Testing framework: curl-based API verification, the documented Java monolith default; also configure Spring Boot test dependencies and JUnit Platform as required by the build\n\nCreate a standard Gradle Spring Boot application using package `com.enterprise.hr`. Keep password hashes out of every API response. Do not add an ADMIN role or any roles beyond the three specified below.\n\n## Functional specification\n\n### 1. Domain entities and workflow enums\nImplement these persistable JPA entities with database-generated `Long` identifiers, required-field constraints, and the stated relationships:\n\n- `Employee` in table `employee`: required unique `employeeCode`, required `fullName`, required unique `email`, required BCrypt `passwordHash`, required `Role`, and required integer `annualLeaveEntitlementDays`. It may optionally reference a `Department`, a `Designation`, and another `Employee` as its direct manager. Model the self-referencing hierarchy so an employee can have many direct subordinates. An employee owns attendance records, leave requests, and payroll records. Never serialize `passwordHash`.\n- `Department` in table `department`: required unique `name` and optional `description`; one department may be assigned to many employees.\n- `Designation` in table `designation`: required unique `name` and optional `description`; one designation may be assigned to many employees.\n- `AttendanceRecord` in table `attendance`: required employee, server-recorded `Instant checkInAt`, and nullable server-recorded `Instant checkOutAt` while open.\n- `LeaveRequest` in table `leave_request`: required employee, inclusive `LocalDate startDate` and `endDate`, required `reason`, required `LeaveStatus`, and optional reviewing employee and decision `Instant`.\n- `PayrollRecord` in table `payroll_record`: required employee, `LocalDate payPeriodStart` and `payPeriodEnd`, required `BigDecimal grossAmount`, `deductionAmount`, and `netAmount`, plus optional `Instant paidAt`.\n- `PerformanceReviewCycle` in table `performance_review_cycle`: required unique `name`, required start and end `LocalDate` values, and optional `description`.\n\nExpose the exact enum values `Role.HR`, `Role.MANAGER`, `Role.EMPLOYEE` and `LeaveStatus.PENDING`, `LeaveStatus.APPROVED`, `LeaveStatus.REJECTED`. Provide JPA constructors and service-compatible getters/setters. Enforce uniqueness and required values with appropriate JPA/database constraints.\n\n### 2. Authentication and authorization\nImplement public `POST /api/auth/login`, accepting employee email and password and returning a JWT for valid credentials. Use BCrypt for password verification and onboarding password encoding. The JWT subject must be the employee email and it must carry the employee role authority.\n\nConfigure stateless Spring Security with a JWT request filter. Only `POST /api/auth/login` is anonymous; all other routes require authentication. Invalid or missing bearer tokens return structured 401 errors. Authorization failures return structured 403 errors. Enforce HR-only, manager-only, and authenticated-user routes as specified below, using route security and/or `@PreAuthorize`.\n\n### 3. HR employee onboarding and hierarchy\nImplement:\n- `POST /api/employees`: HR-only onboarding with credentials, role, annual leave entitlement, and optional department and designation assignments. Store only a BCrypt password hash.\n- `PUT /api/employees/{employeeId}/manager`: HR-only assignment or clearing of the employee’s direct manager. The manager must be another employee when assigned.\n\nValidate all request bodies and return appropriate errors for duplicate identities, missing referenced resources, invalid assignments, and other business-rule violations.\n\n### 4. Department and designation management\nImplement department routes:\n- `POST /api/departments`: HR-only creation.\n- `GET /api/departments`: available to any authenticated role.\n- `PUT /api/departments/{id}`: HR-only update.\n- `DELETE /api/departments/{id}`: HR-only deletion, rejected as a business-rule conflict if employees are assigned to it.\n\nImplement designation routes:\n- `POST /api/designations`: HR-only creation.\n- `GET /api/designations`: available to any authenticated role.\n- `PUT /api/designations/{id}`: HR-only update.\n- `DELETE /api/designations/{id}`: HR-only deletion, rejected as a business-rule conflict if employees are assigned to it.\n\n### 5. Attendance\nImplement authenticated employee attendance operations:\n- `POST /api/attendance/check-in`: create an open attendance record for the caller using the current server `Instant`.\n- `POST /api/attendance/check-out`: close the caller’s open attendance record using the current server `Instant`.\n- `GET /api/attendance/me`: list the caller’s attendance records.\n\nDo not allow a second open attendance record before checkout. Enforce valid open/closed workflow state and return structured business-rule errors for invalid check-in or check-out operations.\n\n### 6. Leave requests and approval workflow\nImplement:\n- `POST /api/leave-requests`: any authenticated employee creates a pending request with inclusive start and end dates and a required reason.\n- `GET /api/leave-requests/me`: any authenticated employee lists only their own requests.\n- `GET /api/leave-requests/pending-subordinates`: a manager lists pending requests from direct subordinates only.\n- `PATCH /api/leave-requests/{id}/decision`: a manager directly assigned to the requesting employee approves or rejects a pending request. The decision input may contain only `APPROVED` or `REJECTED`, never `PENDING`.\n\nOnly direct managers may decide subordinate requests. Only pending requests are decidable. On a decision, record the reviewing manager and decision timestamp. Approval must reject overlapping approved requests and must reject requests whose inclusive duration exceeds the employee’s remaining annual leave balance. Calculate inclusive duration from start date through end date. Remaining leave equals the employee’s annual entitlement minus approved leave days. Support the `PENDING`, `APPROVED`, and `REJECTED` statuses exactly.\n\n### 7. Payroll management\nImplement HR-only payroll routes:\n- `POST /api/payroll-records`: create a payroll record.\n- `GET /api/payroll-records`: list payroll records.\n- `PUT /api/payroll-records/{id}`: update a payroll record.\n- `DELETE /api/payroll-records/{id}`: delete a payroll record.\n\nValidate referenced employees, dates, monetary fields, and resource identifiers. Return 404 for missing resources and structured business-rule errors for invalid payroll state or values.\n\n### 8. Performance review cycles\nImplement:\n- `POST /api/performance-review-cycles`: HR-only creation.\n- `GET /api/performance-review-cycles`: any authenticated role lists cycles.\n- `PUT /api/performance-review-cycles/{id}`: HR-only update.\n- `DELETE /api/performance-review-cycles/{id}`: HR-only deletion.\n\nValidate required fields, unique cycle names, valid date ranges, and missing-resource behavior.\n\n### 9. Administrative reports\nTreat HR as the administrative role because no separate ADMIN role was requested. Implement HR-only:\n- `GET /api/reports/attendance`: return attendance report data, optionally filtered by inclusive date range.\n- `GET /api/reports/leave-balances`: return every employee’s annual leave entitlement, approved leave days, and remaining leave balance.\n\nLeave-balance calculations must use inclusive approved leave days and compute remaining balance as entitlement minus approved days. Validate optional report date ranges and return structured errors for invalid filters.\n\n### 10. DTOs, repositories, errors, and HTTP behavior\nCreate typed validated request and response DTOs for every mutating route, login/token responses, all entity responses, attendance and leave workflows, payroll, review cycles, reports, and API errors. DTOs must never expose employee password hashes.\n\nCreate Spring Data repositories for all seven entities. Include repository methods for employee lookup by email and employee code, attendance records and open-record lookup, employee attendance reporting, employee leave requests, pending direct-subordinate requests, approved leave totals and overlap checks, leave-balance reporting, duplicate checks, and normal CRUD operations. Controllers must not access repositories directly.\n\nImplement a `@RestControllerAdvice` with public `ResourceNotFoundException` and `BusinessRuleException` types. Map validation failures to 400, missing resources to 404, business-rule conflicts to 409, authentication failures to 401, and authorization failures to 403. Responses must use one consistent structured JSON API error shape with no stack traces or password data.\n\n### 11. Configuration, build, and verification\nCreate:\n- `settings.gradle` with the Gradle root project name `hr-management-api`.\n- `build.gradle` applying Spring Boot 3.4.0 and dependency management, configuring Java 21 and Gradle 8.11.1 compatibility, and including Spring Web, Validation, Security, Spring Data JPA, MySQL Connector/J, JJWT API/implementation/Jackson modules, and Spring Boot test dependencies with JUnit Platform.\n- `src/main/java/com/enterprise/hr/HrManagementApplication.java` with a standard `@SpringBootApplication` entry point.\n- `src/main/resources/application.yml` with datasource URL, username, and password sourced from environment variables with local MySQL defaults; Hibernate schema update and MySQL dialect; configurable JWT secret and expiration; and suitable JSON error configuration. Do not hard-code production credentials.\n\nImplement the project files in the declared waves and package locations where practical, including `HrDomain.java`, `HrDtos.java`, `HrRepositories.java`, `ApiExceptionHandler.java`, `JwtSecurity.java`, `HrService.java`, and `HrController.java`. Generate clean, multi-line, properly formatted source files.\n\nRun and fix:\n- `./gradlew build`\n- `./gradlew test`\n- An API verification request such as `curl -sS -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"unknown@example.com\",\"password\":\"invalid\"}'`\n\nFollow the Java monolith mode’s boot verification, testing, report, and deployment-artifact instructions. Do not use Kafka, pagination, external integrations, or push workflows because they are not part of this plan."}
+2026-09-28 10:05:34,651 INFO deepagent.transcript: [human] Build the project named `job-d559a533-f213-4744-9e90-c578859a7a58` as a greenfield Java monolith REST backend for enterprise HR management.
+
+Before implementing anything, read these instructions:
+- `/aisdlc/modes/greenfield/07-java-monolith.md`
+- `/aisdlc/capabilities/auth.md`
+- `/aisdlc/capabilities/build-quality-and-testing.md`
+- `/aisdlc/capabilities/reports-and-deploy.md`
+
+## Fixed technology stack
+- Language: Java 21.0.12.1
+- Framework: Spring Boot 3.4.0
+- Build tool: Gradle 8.11.1
+- ORM: Spring Data JPA with Hibernate 6.6.2
+- Database: MySQL 8.4.3
+- Messaging: none requested
+- Authentication: JWT bearer tokens with BCrypt password hashing
+- Authorization: exactly the `HR`, `MANAGER`, and `EMPLOYEE` roles; use Spring Security `ROLE_` authorities
+- API conventions: JSON REST APIs under `/api`, validated request bodies, appropriate HTTP status codes, and structured JSON errors for validation, missing-resource, authentication, authorization, and business-rule failures
+- Infrastructure to generate: externalized MySQL, JPA, JWT, and server configuration in `application.yml`; do not invent additional broker, cache, or messaging infrastructure
+- Testing framework: curl-based API verification, the documented Java monolith default; also configure Spring Boot test dependencies and JUnit Platform as required by the build
+
+Create a standard Gradle Spring Boot application using package `com.enterprise.hr`. Keep password hashes out of every API response. Do not add an ADMIN role or any roles beyond the three specified below.
+
+## Functional specification
+
+### 1. Domain entities and workflow enums
+Implement these persistable JPA entities with database-generated `Long` identifiers, required-field constraints, and the stated relationships:
+
+- `Employee` in table `employee`: required unique `employeeCode`, required `fullName`, required unique `email`, required BCrypt `passwordHash`, required `Role`, and required integer `annualLeaveEntitlementDays`. It may optionally reference a `Department`, a `Designation`, and another `Employee` as its direct manager. Model the self-referencing hierarchy so an employee can have many direct subordinates. An employee owns attendance records, leave requests, and payroll records. Never serialize `passwordHash`.
+- `Department` in table `department`: required unique `name` and optional `description`; one department may be assigned to many employees.
+- `Designation` in table `designation`: required unique `name` and optional `description`; one designation may be assigned to many employees.
+- `AttendanceRecord` in table `attendance`: required employee, server-recorded `Instant checkInAt`, and nullable server-recorded `Instant checkOutAt` while open.
+- `LeaveRequest` in table `leave_request`: required employee, inclusive `LocalDate startDate` and `endDate`, required `reason`, required `LeaveStatus`, and optional reviewing employee and decision `Instant`.
+- `PayrollRecord` in table `payroll_record`: required employee, `LocalDate payPeriodStart` and `payPeriodEnd`, required `BigDecimal grossAmount`, `deductionAmount`, and `netAmount`, plus optional `Instant paidAt`.
+- `PerformanceReviewCycle` in table `performance_review_cycle`: required unique `name`, required start and end `LocalDate` values, and optional `description`.
+
+Expose the exact enum values `Role.HR`, `Role.MANAGER`, `Role.EMPLOYEE` and `LeaveStatus.PENDING`, `LeaveStatus.APPROVED`, `LeaveStatus.REJECTED`. Provide JPA constructors and service-compatible getters/setters. Enforce uniqueness and required values with appropriate JPA/database constraints.
+
+### 2. Authentication and authorization
+Implement public `POST /api/auth/login`, accepting employee email and password and returning a JWT for valid credentials. Use BCrypt for password verification and onboarding password encoding. The JWT subject must be the employee email and it must carry the employee role authority.
+
+Configure stateless Spring Security with a JWT request filter. Only `POST /api/auth/login` is anonymous; all other routes require authentication. Invalid or missing bearer tokens return structured 401 errors. Authorization failures return structured 403 errors. Enforce HR-only, manager-only, and authenticated-user routes as specified below, using route security and/or `@PreAuthorize`.
+
+### 3. HR employee onboarding and hierarchy
+Implement:
+- `POST /api/employees`: HR-only onboarding with credentials, role, annual leave entitlement, and optional department and designation assignments. Store only a BCrypt password hash.
+- `PUT /api/employees/{employeeId}/manager`: HR-only assignment or clearing of the employee’s direct manager. The manager must be another employee when assigned.
+
+Validate all request bodies and return appropriate errors for duplicate identities, missing referenced resources, invalid assignments, and other business-rule violations.
+
+### 4. Department and designation management
+Implement department routes:
+- `POST /api/departments`: HR-only creation.
+- `GET /api/departments`: available to any authenticated role.
+- `PUT /api/departments/{id}`: HR-only update.
+- `DELETE /api/departments/{id}`: HR-only deletion, rejected as a business-rule conflict if employees are assigned to it.
+
+Implement designation routes:
+- `POST /api/designations`: HR-only creation.
+- `GET /api/designations`: available to any authenticated role.
+- `PUT /api/designations/{id}`: HR-only update.
+- `DELETE /api/designations/{id}`: HR-only deletion, rejected as a business-rule conflict if employees are assigned to it.
+
+### 5. Attendance
+Implement authenticated employee attendance operations:
+- `POST /api/attendance/check-in`: create an open attendance record for the caller using the current server `Instant`.
+- `POST /api/attendance/check-out`: close the caller’s open attendance record using the current server `Instant`.
+- `GET /api/attendance/me`: list the caller’s attendance records.
+
+Do not allow a second open attendance record before checkout. Enforce valid open/closed workflow state and return structured business-rule errors for invalid check-in or check-out operations.
+
+### 6. Leave requests and approval workflow
+Implement:
+- `POST /api/leave-requests`: any authenticated employee creates a pending request with inclusive start and end dates and a required reason.
+- `GET /api/leave-requests/me`: any authenticated employee lists only their own requests.
+- `GET /api/leave-requests/pending-subordinates`: a manager lists pending requests from direct subordinates only.
+- `PATCH /api/leave-requests/{id}/decision`: a manager directly assigned to the requesting employee approves or rejects a pending request. The decision input may contain only `APPROVED` or `REJECTED`, never `PENDING`.
+
+Only direct managers may decide subordinate requests. Only pending requests are decidable. On a decision, record the reviewing manager and decision timestamp. Approval must reject overlapping approved requests and must reject requests whose inclusive duration exceeds the employee’s remaining annual leave balance. Calculate inclusive duration from start date through end date. Remaining leave equals the employee’s annual entitlement minus approved leave days. Support the `PENDING`, `APPROVED`, and `REJECTED` statuses exactly.
+
+### 7. Payroll management
+Implement HR-only payroll routes:
+- `POST /api/payroll-records`: create a payroll record.
+- `GET /api/payroll-records`: list payroll records.
+- `PUT /api/payroll-records/{id}`: update a payroll record.
+- `DELETE /api/payroll-records/{id}`: delete a payroll record.
+
+Validate referenced employees, dates, monetary fields, and resource identifiers. Return 404 for missing resources and structured business-rule errors for invalid payroll state or values.
+
+### 8. Performance review cycles
+Implement:
+- `POST /api/performance-review-cycles`: HR-only creation.
+- `GET /api/performance-review-cycles`: any authenticated role lists cycles.
+- `PUT /api/performance-review-cycles/{id}`: HR-only update.
+- `DELETE /api/performance-review-cycles/{id}`: HR-only deletion.
+
+Validate required fields, unique cycle names, valid date ranges, and missing-resource behavior.
+
+### 9. Administrative reports
+Treat HR as the administrative role because no separate ADMIN role was requested. Implement HR-only:
+- `GET /api/reports/attendance`: return attendance report data, optionally filtered by inclusive date range.
+- `GET /api/reports/leave-balances`: return every employee’s annual leave entitlement, approved leave days, and remaining leave balance.
+
+Leave-balance calculations must use inclusive approved leave days and compute remaining balance as entitlement minus approved days. Validate optional report date ranges and return structured errors for invalid filters.
+
+### 10. DTOs, repositories, errors, and HTTP behavior
+Create typed validated request and response DTOs for every mutating route, login/token responses, all entity responses, attendance and leave workflows, payroll, review cycles, reports, and API errors. DTOs must never expose employee password hashes.
+
+Create Spring Data repositories for all seven entities. Include repository methods for employee lookup by email and employee code, attendance records and open-record lookup, employee attendance reporting, employee leave requests, pending direct-subordinate requests, approved leave totals and overlap checks, leave-balance reporting, duplicate checks, and normal CRUD operations. Controllers must not access repositories directly.
+
+Implement a `@RestControllerAdvice` with public `ResourceNotFoundException` and `BusinessRuleException` types. Map validation failures to 400, missing resources to 404, business-rule conflicts to 409, authentication failures to 401, and authorization failures to 403. Responses must use one consistent structured JSON API error shape with no stack traces or password data.
+
+### 11. Configuration, build, and verification
+Create:
+- `settings.gradle` with the Gradle root project name `hr-management-api`.
+- `build.gradle` applying Spring Boot 3.4.0 and dependency management, configuring Java 21 and Gradle 8.11.1 compatibility, and including Spring Web, Validation, Security, Spring Data JPA, MySQL Connector/J, JJWT API/implementation/Jackson modules, and Spring Boot test dependencies with JUnit Platform.
+- `src/main/java/com/enterprise/hr/HrManagementApplication.java` with a standard `@SpringBootApplication` entry point.
+- `src/main/resources/application.yml` with datasource URL, username, and password sourced from environment variables with local MySQL defaults; Hibernate schema update and MySQL dialect; configurable JWT secret and expiration; and suitable JSON error configuration. Do not hard-code production credentials.
+
+Implement the project files in the declared waves and package locations where practical, including `HrDomain.java`, `HrDtos.java`, `HrRepositories.java`, `ApiExceptionHandler.java`, `JwtSecurity.java`, `HrService.java`, and `HrController.java`. Generate clean, multi-line, properly formatted source files.
+
+Run and fix:
+- `./gradlew build`
+- `./gradlew test`
+- An API verification request such as `curl -sS -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{"email":"unknown@example.com","password":"invalid"}'`
+
+Follow the Java monolith mode’s boot verification, testing, report, and deployment-artifact instructions. Do not use Kafka, pagination, external integrations, or push workflows because they are not part of this plan.
+
+Write the generated codebase under /outputs/job-d559a533-f213-4744-9e90-c578859a7a58/.
+2026-09-28 10:05:37,531 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+2026-09-28 10:05:37,683 INFO deepagent.transcript: [ai] tool_calls=[ls({'path': '/outputs/job-d559a533-f213-4744-9e90-c578859a7a58'}); read_file({'file_path': '/aisdlc/modes/greenfield/07-java-monolith.md', 'offset': 0, 'limit': 1000}); read_file({'file_path': '/aisdlc/capabilities/auth.md', 'offset': 0, 'limit': 1000}); read_file({'file_path': '/aisdlc/capabilities/build-quality-and-testing.md', 'offset': 0, 'limit': 1000}); read_file({'file_path': '/aisdlc/capabilities/reports-and-deploy.md', 'offset': 0, 'limit': 1000}); read_file({'file_path': '/aisdlc/skills/docker-toolchain/SKILL.md', 'offset': 0, 'limit': 1000})] [{'id': 'rs_0fd1f732dc10d602006aba3bef794887d29ca8c5a5dc190ac8', 'summary': [], 'type': 'reasoning', 'content': [], 'encrypted_content': 'gAAAAABqujvxXQpngLxFR_KgN_xgS_f1PFEgeP5tTdkl4E8sMOwTrHxrHAsGExwvqlEPxCMCke70gdK7zjA567tCsGXWr76qRuxR16tLlcFYWGfDiTfU5s3j5AqQvdf3BaaOEXOOoGYRm0_eoXeA_aHy7IK1TQf4KjVMiweVHfg6fPGOoIJuB4LaNbdAzBaZV-7W7RtkJFNk2SYrW9vBiZ8AxmOuaEwsHqK6UtWeIx8sryY_1-CYhu9dwpvXQqUK_M2M5m2GmSx0fk63INjb4cSNEEeJRdiYhDM2RKOq61PMSQVU2H9w0tiP5f98iXwEob5Po4eX77FByiG4OchvMdLRp7JFWzQ8LkSrrlhwD-0MDnf_3FQmM3cupmPEjBcYRtxWxuYAxvIb9_wFHkw5r2lW3VatejsJkoxICKsoT5mgiKhI0lyKZMgsdInl0h5_eMKeVtKSJ4e94uqpGJtX2P1s8cKDGNse6Unyd-q9BLKpmaeWMsYZG-s9s6yyfvKqcTnEIf28B5cnuCynX_9c2epx97ABO4quxzm1-J0BJrskfkivzD6SuVMaaMSP9Ezd8Vi_G7HVbWzoNCzjvkUPgslcN8HrOzec_wCCvDVCPNsvxA1TQXj0ide2aaAVmy7dJa7WOsCDqvq7lNBRiYE7UEzcTE6BoHFmkCYjFul1_mc5nmbaIYtXUqDaKwkb0IsIr6JfkyPJQzWp_PdegqSqH3OQToE5XwP0tErWp5D5ZQ0WCtf4JBK2_KX2XfFap8DVWLwZTyLcLGOqvTP8MXLNUaaDTrFUSHIOLUgN33WVDGEPTbOt8tenfb6WNJatl4wftcF4TB6Z8XVjtRSZcgnEg-qzMAXCL2UkX9jfAh5rYdZSQ2EOMtudSeE8LndvfLYoGJFWE0VLjpuGHtkpT2w90WfS8lD7O2_BPhwXKOGBNhLYwDoR17WrHTQXIBsLHTH4xG6NHsz_ivmVWWPkCB4FTsuhn8KYvk91SbsqPF241c4qEJafvoM9VxBboAP5bBrd6c9n6du1NmvaK-DY3QnsMX-wZ_1JD_cSOIzbX8usAJnsanzQikXTfHPdVCo2ARt1IT_WGMorhn4c8_BP74b1B171Pyvq1fTE4yoRodaUF92kMkZ7-fHx8LvClUKCxPU_Isl7ybWpA4vo_3y0SjG-wYj6ft4vAxBZDi2BToLPpr1xd5ocX7y5BGmkj4kngX4fxEzzuXSDibRhc4QjeCwM-1JeTKVP7gQ8fnoNiGpRhRbt8VNFV_uwYpE0Ah4iK8xtFVxhi4RHQJxywuZr7LITbALa21LXZkkICA=='}, {'arguments': '{"path":"/outputs/job-d559a533-f213-4744-9e90-c578859a7a58"}', 'call_id': 'call_ibsIJyRhJFftX2szSSaXtGi8', 'name': 'ls', 'type': 'function_call', 'id': 'fc_0fd1f732dc10d602006aba3bf124a887d2ad18549b5d39b6aa', 'status': 'completed'}, {'arguments': '{"file_path":"/aisdlc/modes/greenfield/07-java-monolith.md","offset":0,"limit":1000}', 'call_id': 'call_Ia5qOr7tqjLYoc7B3BCRgl0T', 'name': 'read_file', 'type': 'function_call', 'id': 'fc_0fd1f732dc10d602006aba3bf124bc87d28cdf718400618cba', 'status': 'completed'}, {'arguments': '{"file_path":"/aisdlc/capabilities/auth.md","offset":0,"limit":1000}', 'call_id': 'call_6wUoGSOX8nN1A8RJm2RNNTaQ', 'name': 'read_file', 'type': 'function_call', 'id': 'fc_0fd1f732dc10d602006aba3bf124c487d28fa5d02bf829158f', 'status': 'completed'}, {'arguments': '{"file_path":"/aisdlc/capabilities/build-quality-and-testing.md","offset":0,"limit":1000}', 'call_id': 'call_1HgzBO8TWYivejlkaNbLK8Ey', 'name': 'read_file', 'type': 'function_call', 'id': 'fc_0fd1f732dc10d602006aba3bf124cc87d2b9d786111a9c6756', 'status': 'completed'}, {'arguments': '{"file_path":"/aisdlc/capabilities/reports-and-deploy.md","offset":0,"limit":1000}', 'call_id': 'call_HGfSKmEtPZN6WrLi7C23u15P', 'name': 'read_file', 'type': 'function_call', 'id': 'fc_0fd1f732dc10d602006aba3bf124d487d29008b57c4f95f973', 'status': 'completed'}, {'arguments': '{"file_path":"/aisdlc/skills/docker-toolchain/SKILL.md","offset":0,"limit":1000}', 'call_id': 'call_MM6Y1uQNWWz1m8OdAyNFYtGB', 'name': 'read_file', 'type': 'function_call', 'id': 'fc_0fd1f732dc10d602006aba3bf124dc87d29479f8a14ca33928', 'status': 'completed'}]
+2026-09-28 10:05:37,719 INFO deepagent.transcript: [tool] (name=ls) ['/outputs/job-d559a533-f213-4744-9e90-c578859a7a58/logs/']
+2026-09-28 10:05:37,719 INFO deepagent.transcript: [tool] (name=read_file) @@ lines 1-56 of 56 @@
+# Java monolith greenfield
+
+Nothing is pre-scaffolded here — the agent writes everything itself. (Contrast [Java microservices](08-java-microservices.md), which pre-scaffolds infra modules before the agent's first token.)
+
+## Build tool handling
+
+One build-tool profile call drives the manifest name, build-check/package commands, jar glob, and a wrapper-bootstrap fragment, threaded through STEP 2 (build config), STEP 7 (start scripts), STEP 10 (build check), STEP 10.5 (linting), and the fix loop. All three build tools — Maven, Gradle, and Ant — are supported here (unlike microservices, where Ant is rejected at intake, see [Request Intake](../../reference/02-request-intake-and-config.md)).
+
+## STEP sequence
+
+Rendered before `EXECUTION`: persona, formatting guard, database/version/port blocks, shell rules, sandbox restriction, config targets, package structure.
+
+| Step | Condition | What it does |
+|---|---|---|
+| 1 | always | Entity design — JPA entities or Mongo documents. Kafka design note if gated. |
+| 2 | always | Build + DB config: manifest, `application.properties`, mandatory compiler-release pin, springdoc + forwarded-headers config. Kafka build-config note if gated. |
+| 2a | build-tool conditional | Wrapper bootstrap (Gradle / Ant+Ivy / Maven — exactly one renders). |
+| 3 | always | DTOs. |
+| 4 | `auth.method` | Auth — see [Auth](../../capabilities/auth.md). |
+| 5 | always | Repositories + services + controllers + main; mandatory Swagger annotations; pagination inline — see [Pagination](../../capabilities/pagination.md); JPA correctness rule (use the save call's returned id, never call the getter on a transient entity). |
+| 5.5 | Kafka gated | Producer/consumer wiring. |
+| 6 | always | Seed data. |
+| 7 | always | Infra: start scripts, Dockerfile/compose/Makefile per flag — the start script is what STEP 11's own boot verification uses (see [Boot verification](../../capabilities/reports-and-deploy.md#boot-verification-every-mode-every-language)); Dockerfile/compose are deliverables only, never the harness's own verification mechanism. |
+| 7b | CI flag | CI workflow. |
+| 8 | always | (no-op — falls through to 9). |
+| 9 | always | README. |
+| 10 | always | Build check, fix all compile errors. |
+| 10.5 | linting gated | Linting (checkstyle) — see [Build, Quality & Testing](../../capabilities/build-quality-and-testing.md). |
+| 11 | `testing_framework` | Compilation verification / API testing (curl) / JUnit 5 + Mockito (the documented default) — see [Build, Quality & Testing](../../capabilities/build-quality-and-testing.md). |
+| 12 | `testing_framework` | Skip / baseline test summary. |
+| 13 | always | Summary. |
+| 14 | `testing_framework` | Skip / iterative fix loop, max 5. |
+| 15 / 15.5 | always | Reports (xlsx + docx), email sub-step right after. |
+| 16 | always | Final summary — the true stop condition. |
+
+## Hard safety rules
+
+- Port 8080 protection: "NEVER KILL PORT 8080 — it may be used by other services." The app itself runs on its own allocated `{free_port}`, stopped via `$SERVER_PID` — this is a separate, unrelated port warning.
+- No brace expansion in shell commands.
+- Stop the server with `kill $SERVER_PID` only. No ngrok — tests run against localhost directly.
+- Confined to `output_dir`; this platform's own source must never appear in the generated project.
+- Config gating: no refresh/RBAC/websocket infrastructure unless the corresponding flag is set.
+- JPA correctness: never call the id getter on a transient entity.
+
+## Completion criteria
+
+Stop only when STEP 16's final summary has been printed. The fix loop (STEP 14) stops when no failures/timeouts remain and every skip is confirmed genuinely untestable, or after 5 iterations with no improvement. `completed` status is additionally gated on the xlsx report — see [Quality Gates](../../reference/07-quality-gates.md).
+
+## Capability hooks
+
+| Capability | Where it lands | Gate |
+|---|---|---|
+| Kafka | STEP 1 tail → STEP 2 tail → STEP 5.5 → STEP 11 (curl arm only) | `kafka_url` |
+| Auth | STEP 4, plus inline notes in STEP 5 and STEP 11 | `auth.method` |
+| Pagination | Inline in STEP 5 only | `api.pagination.style` |
+| Linting | STEP 10.5, checkstyle only | `linting_tool` |
+2026-09-28 10:05:37,719 INFO deepagent.transcript: [tool] (name=read_file) @@ lines 1-65 of 65 @@
+# Auth capability
+
+Scaffolding-instruction text and auth-specific test-plan text for every framework family, branched on `auth.method` (`"jwt"` vs `"apikey"`), plus two shared framework-agnostic JWT sub-features: refresh tokens and RBAC. One function pair per framework family; Flask and Bottle already share one test-plan function, since their shapes are near-identical.
+
+| Framework family | Scaffold builder | Test-plan builder |
+|---|---|---|
+| FastAPI (reused by Python brownfield) | `_build_auth_step_block` | `_auth_test_plan` |
+| Django | `_build_django_auth_step_block` | `_django_auth_test_plan` |
+| Tornado | `_build_tornado_auth_step_block` | `_tornado_auth_test_plan` |
+| Flask | `_build_flask_auth_blocks` | `_flask_bottle_auth_test_plan` (shared with Bottle) |
+| Bottle | `_build_bottle_auth_blocks` | `_flask_bottle_auth_test_plan` (shared with Flask) |
+| Node.js/Express | `_build_nodejs_auth_blocks` | `_nodejs_auth_test_plan` |
+| Java monolith | `_build_java_auth_step_block` | Java JUnit/curl helpers, shared with microservices |
+| Java microservices | `_build_java_microservices_auth_step_block` | Same two Java helpers |
+
+Java brownfield surfaces auth as its own display section (a "REQUESTED CONFIG TARGETS" line plus a standalone "AUTH TARGET" block); Python and Node.js brownfield only steer test-plan wording.
+
+## What gets scaffolded
+
+- **apikey** (all 8 families): an `ApiKey` model/entity (hashed key, unique+indexed, name, active flag, timestamps; Java adds an expiry), a raw-key-hashing helper, a key-generation helper, a create/list/revoke management surface.
+- **JWT** (all 8 families): bcrypt password hashing, a generated secret written to the env file, never hardcoded.
+- **Refresh tokens** (`auth.jwt.refresh=True`): a distinct refresh vs. access claim, a separate longer expiry, a persisted+revocable refresh-token row, `/auth/refresh` and `/auth/logout` (logout must never touch the still-valid access token). Expiry comparisons use timezone-aware datetimes with a few seconds of clock-skew leeway.
+- **RBAC** (`auth.jwt.rbac=True`, or `auth.api_key.rbac=True` for Java apikey): a role field, baked into the token claim or resolved at key-lookup time; one reusable enforcement primitive returning 403 (never 401) on mismatch; a role is immutable once assigned. Spring needs a `"ROLE_"`-prefixed authority or every role gets 403 on every endpoint.
+
+## Admin-key protection scheme (apikey mode only)
+
+Every framework protects its own create/list/revoke `/api-keys` surface with a **separate admin credential** — those endpoints are never left open to any caller. One shared shape across all 8 families:
+
+> A separate `X-Admin-Key` header is checked, using a constant-time comparison, against an `ADMIN_API_KEY` value read from the environment. A mismatch or missing header is a 401 (not a redirect, not a 403). This gate protects key management ONLY — it must never guard business endpoints.
+
+Only the comparison primitive and read syntax vary by language:
+
+| Family | Compare primitive | Wiring |
+|---|---|---|
+| FastAPI | `secrets.compare_digest` | `Depends(get_admin_key)` |
+| Django | `secrets.compare_digest` | `IsAdminApiKey(BasePermission)`, applied to the ApiKey viewset only |
+| Tornado | `secrets.compare_digest` | `get_admin_key(handler)`, called first in every `ApiKeyHandler` method |
+| Flask | `secrets.compare_digest` | `@require_admin_key` decorator |
+| Bottle | `secrets.compare_digest` | `require_admin_key` decorator |
+| Node.js | `crypto.timingSafeEqual` (both sides sha256-hashed first, to avoid a length-mismatch throw on raw values) | `adminAuth` middleware |
+| Java monolith | `MessageDigest.isEqual` | Checked first in every `ApiKeyController` method |
+| Java microservices | `MessageDigest.isEqual`, key generated per service, exported as a real env var — never written into that service's properties file | Same as monolith |
+
+Java's Spring `SecurityFilterChain` wiring: `.requestMatchers("/api/v1/api-keys/**", "/actuator/health", "/docs/**", ...).permitAll().anyRequest().authenticated()` then `.addFilterBefore(apiKeyFilter, ...)`. Microservices warns explicitly against a second `CorsConfig` bean — it doubles the `Access-Control-Allow-Origin` header, which browsers reject outright.
+
+## Test plans
+
+One shared narrative across all 8 families, only the tool syntax differs:
+
+- **apikey**: admin creates a throwaway key via the admin header, then the raw key is sent as the *business* header (never `Authorization: Bearer`, never `X-Admin-Key`) on entity CRUD; also verify a missing/wrong header returns 401.
+- **JWT**: register → login → capture token → CRUD with the token.
+
+Tool delta: curl script, pytest/test-client fixture, Tavern YAML, or (Java) JUnit integration-test additions + curl lines — same narrative, different syntax. FastAPI additionally gets Schemathesis, with a session-scoped fixture per method.
+
+## Gating
+
+- `auth.method`: `"jwt"` (default) vs `"apikey"` selects the whole branch.
+- `auth.jwt.refresh` / `auth.jwt.rbac` / `auth.api_key.rbac` (Java apikey only): independent feature gates.
+- `auth.api_key.header_name`: the **business-endpoint** header name is configurable; `X-Admin-Key` is always the literal string, never configurable.
+- `auth.api_key.expiry_minutes` (Java only): an expired key is treated identically to an inactive one — no distinct HTTP status.
+
+## Greenfield vs. brownfield
+
+- **Greenfield**: scaffolds new auth from scratch, per the tables above.
+- **Brownfield** (all three languages): never scaffolds new auth. `auth.method` only picks which test-plan wording to write for whatever auth the cloned repo already has, and for Java is also displayed as its own config-target section.
+2026-09-28 10:05:37,719 INFO deepagent.transcript: [tool] (name=read_file) @@ lines 1-73 of 73 @@
+# Build quality, formatting, and the fix loop
+
+Covers formatting, linting, test generation/execution, and the self-correcting fix loop — the capabilities deciding how thoroughly a project is verified before the agent stops, and how it self-corrects when verification fails.
+
+## Formatting guard
+
+One shared block, injected into every one of the 11 target builders: *"Write real, properly indented multi-line files — NEVER collapse content onto a single line, even a short config file. A literal `\n` (backslash + "n") is NOT a line break."* Exists because generated projects were observed shipping files collapsed onto one line — the model imitating a prompt's own inline shorthand as literal file content.
+
+## Linting
+
+Normalized before it ever reaches a prompt builder: `normalize_linting_tool(tool, language, framework)` degrades an unrecognized value to `"none"` (step skipped) with a logged substitution event — the same shape as the testing-framework model below. This closes the old failure mode where an unrecognized value silently produced no lint step at all, no error, no log.
+
+Recognized per ecosystem:
+
+| Mode(s) | Recognizes | Step # |
+|---|---|---|
+| FastAPI, Django, Tornado (greenfield) | `ruff` | 11.5 |
+| Flask, Bottle | `flake8`, `ruff` | 10.5 |
+| Node.js greenfield | `eslint` | 10.5 |
+| Java (monolith, microservices, brownfield) | `checkstyle` | varies |
+| Python brownfield | `ruff` | 5.5 |
+| Node.js brownfield | `eslint` | 5.5 |
+
+Node.js brownfield now has its own recognized set (it used to route through the Python brownfield builder, which only knew `ruff`, so it couldn't lint at all — fixed by giving it the same dedicated builder treatment as its other steps; see [Node.js brownfield](../modes/brownfield/02-nodejs.md)).
+
+## Testing framework resolution
+
+One normalizer resolves `testing_framework` before any builder runs, closing two separate failure modes that used to exist independently:
+
+- **Silent step loss** (Flask/Bottle/Node.js greenfield, Python/Node.js brownfield): an unrecognized value used to leave the entire testing STEP absent from the rendered prompt, with no event — and because the completion gate still applies whenever `testing_framework != "none"`, that produced a job gated on a report the agent was never told to write.
+- **Generation/execution disagreement** (FastAPI): the generation step and the execution step used to recognize different sets, so an unrecognized value could get test files written that were never run.
+
+Now every mode's generation and execution steps consult the same already-resolved value. An unsupported request (e.g. `schemathesis` on a framework with no OpenAPI schema by default) degrades to `curl` with a logged substitution event — the model both Django and Tornado already used correctly.
+
+| Language / framework default | Value |
+|---|---|
+| Java microservices | `junit` |
+| Java monolith/brownfield, Django, Flask, Bottle, Node.js | `curl` |
+| FastAPI, Tornado | `none` |
+
+`"none"` skips the server-start step entirely — the two async Python frameworks keep that default for historical compatibility, everything else defaults to at least a boot-and-probe. That one default is the biggest determinant of whether the completion gate applies to a given job at all (see [Quality Gates](../reference/07-quality-gates.md)).
+
+## Java testing
+
+Shared JUnit/curl blocks used by both Java greenfield modes and Java brownfield's fix-loop: unit-test additions, integration-test additions (+ an auth-aware variant), an enforcement note explicitly rejecting "Tests run: 0" as a pass, endpoint-test additions, and a microservices-only inter-service test addition that greps for cross-service call sites and requires a real test hitting the already-running callee.
+
+## Fix loop
+
+The self-correction contract, shared across modes:
+
+- **Iteration cap**: up to 5 iterations everywhere it applies. Flask/Bottle's loop text is flat ("repeat until all pass") rather than itemizing the cap explicitly, but the same 5-iteration ceiling governs it.
+- **Recall-first discipline**: wherever MemClaw tools are wired, the first action on any failure MUST be a recall of similar past fixes before forming an own diagnosis; a confirmed fix is recorded once per distinct bug.
+- **Stop conditions**: zero failures/timeouts remain and every skip is confirmed genuinely untestable, OR every remaining failure has a concrete external cause, OR the iteration cap is reached with no further reduction.
+- **Java's three-arm dispatch** (shared by both Java greenfield modes): `"none"` → compile-check only; `"curl"` → inline curl, no `.sh` files, restart by PID; else (`"junit"`, the real default for both) → JUnit 5 + Mockito with the "Tests run: 0 is not a pass" enforcement note. All three arms boot the app itself the same way — the shared start-script mechanism in [Reports & Deploy](reports-and-deploy.md#boot-verification-every-mode-every-language), restarted/re-tested by PID each fix-loop iteration — never by rebuilding and re-`up`-ing a per-service container.
+- **Microservices scoping**: the fix loop restarts and re-tests only the failing module, never a batched multi-module command — a batched invocation makes it easy to silently drop one module's failures.
+- **Tornado's fix-loop text** no longer carries Django's "re-run migrations if a model changed" line unconditionally — that line is now conditional on the ORM actually having a migrations step, since Tornado has none.
+
+## The completion-gate contract (what report generation actually specifies)
+
+Every mode's report-generation step produces the same workbook shape — see [Reports & Deploy](reports-and-deploy.md) for the mechanics, this is the contract itself:
+
+- Columns: `#, Method, Endpoint, Description, Status Code, Pass/Fail, Reason` (Java microservices prepends a `Service` column).
+- Pass/Fail must contain the literal word `PASS` (case-insensitive `PASSED` also tolerated — nothing else counts).
+- PASS = a 2xx response, or a deliberately-tested rejection 4xx (e.g. 401 on a protected route with no token).
+- FAIL = a should've-succeeded 4xx, any 5xx, a refused connection, a timeout, or a non-zero test-script exit.
+- SKIPPED is recorded as FAIL with `Reason = "Skipped: <exact reason>"` — there is no separate SKIPPED status the gate treats leniently.
+- One row per real, individually-verified check only — no synthetic or aggregated rows. Most rows are a real HTTP request; a genuine non-HTTP verification (a Kafka consumer actually joining its group and consuming a message, a message-broker delivery check, a JUnit suite's own result) is also a legitimate row, but never dress it up as an HTTP call to fit the shape: leave Status Code blank (or `N/A`) — there is no HTTP status to report — and leave Endpoint blank too rather than putting a topic/queue/suite name where a URL path belongs; put exactly what was actually observed (e.g. "consumer joined group and consumed 1 message") in Description/Reason instead.
+- A row's Status Code and Pass/Fail must come from a response object the report script itself received when it made that request — never authored by predicting what the implementation should return. This holds regardless of tech stack, greenfield or brownfield: a row with no real request behind it is a contract violation even if its Pass/Fail value happens to be correct.
+- **Never drop a previously-recorded unique test case.** If this job's report-generation step runs more than once in the same job (e.g. an interim check during the fix loop, then the final write), each run must preserve every row already established — re-test it and update its Status Code/Pass-Fail/Reason if it's retestable this run, otherwise leave it exactly as last recorded — and add newly-discovered cases on top. Never regenerate the workbook from a fresh, independent rediscovery of endpoints/checks that silently drops a row this job already established just because this particular run didn't happen to re-detect it; a shrinking report is as much a contract violation as a fabricated row. This also protects the platform's own report-repair fallback, which reconstructs `api_test_report.xlsx` from this same script's `test_results.json` write when the xlsx write is missing — see [Task Pipeline](../reference/06-task-pipeline.md) — so that file must carry the same accumulated, never-shrinking set.
+- **Only include a test case a correct implementation can actually pass.** Don't manufacture a foregone-conclusion FAIL by testing a route in a setup that structurally can't succeed regardless of whether the code is right — see [Reports & Deploy](reports-and-deploy.md#boot-verification-every-mode-every-language) for the specific case (a downstream-dependent route probed before its dependency is up) and the fix (sequence or drop that probe, don't report it as a finding about the app).
+- If the thing a row would report on never actually ran — the server never booted, the test run never executed, the curl transcript was never captured — that row is FAIL with `Reason = "Skipped: <exact reason>"` per the rule above. A failed boot or failed test run is never a reason to fall back to predicted rows instead of real ones; see [Reports & Deploy](reports-and-deploy.md)'s boot-verification section for what happens upstream of this.
+- **Omitting a row is not a safer alternative to fabricating one — write the Skipped row, don't leave it out.** Confirmed failure mode: never attempting the full-stack boot at all (not even a failed attempt — genuinely never issuing the start-script call), then reasoning "I won't fabricate HTTP/Kafka rows for something I never ran" and simply not writing them, leaving a workbook containing only JUnit-suite rows, every one `PASS`. That workbook reads as a clean, complete pass to anyone — or any automated gate — reading only the Pass/Fail column; it is *more* misleading than an honest `Skipped: <exact reason>` row would have been, not a more conservative choice. For Java specifically, this matters even on the `"junit"` arm: per [Java testing](#java-testing) above, all three arms boot the app the same way, so "the JUnit suite passed" is never itself a substitute for the endpoint/Kafka rows the boot-verification phase was supposed to produce — if that phase never ran, its rows still belong in the workbook, marked FAIL/Skipped with a real reason, not silently absent.
+- Before writing a single `Skipped: ...` row, confirm to yourself that the start-script call in [Reports & Deploy](reports-and-deploy.md#boot-verification-every-mode-every-language) was actually issued (up to its 3-attempt retry limit) — not merely that infra came up, or that something else went wrong while you were getting ready to test. A `Skipped` reason must name how many boot attempts were made and quote the last captured error; a reason that only states the outcome, with no attempt count or captured error, reports a step that was never tried, not one that failed, and is itself a contract violation. Getting distracted by an unrelated failure (a helper script blocked for its own reasons, a slow container, a wrong path) and quietly writing every row `Skipped` instead of returning to actually attempt the boot is the single most common way this rule gets violated in practice.
+2026-09-28 10:05:37,719 INFO deepagent.transcript: [tool] (name=read_file) @@ lines 1-64 of 64 @@
+# Reports, boot verification, and CI/infra scaffolding
+
+The completion-gate *contract* (workbook columns, PASS/FAIL rules) is in [Build, Quality & Testing](build-quality-and-testing.md), shared with the fix loop. This file covers the mechanics: how the reports actually get written, how a server gets booted and re-booted, and optional unit-test/CI scaffolding.
+
+## Reports — one canonical mechanism per ecosystem, used everywhere in it
+
+Two artifacts, always generated together: an xlsx test report and a docx summary. **Greenfield**: STEP 15/15.5 for FastAPI/Django/Tornado/Java monolith, STEP 16/16.5 for Flask/Bottle/Node.js, STEP 11/11.5 for Java microservices — mode-local numbers don't need to match, see [Prompt Architecture](../reference/04-prompt-architecture.md). **Brownfield**: STEP 12/12.5, plus a deploy-script step at STEP 13.
+
+- **`api_test_report.xlsx`** — one canonical, verbatim script embed per ecosystem, not a mix of embedded-script/prose-description/reimplementation:
+  - **Python/openpyxl** script, used by every Python-family greenfield mode, both Java greenfield modes, and both Python and Java brownfield. (Java projects use this Python throwaway script too — it's a report-generation tool, not part of the generated app, so the app's own language is irrelevant to it.)
+  - **Node/exceljs** script, used by both Node.js greenfield and Node.js brownfield — promoted from what used to be a Node.js-brownfield-only reimplementation to the shared mechanism for both Node modes, closing the old bug where Node.js greenfield instead got the Python script's prose (telling it to `pip install` and run `python3`).
+  - Small per-caller deltas only: extra directories to skip when scanning the tree (Java adds `target/`, `build/`, `.gradle/`), and whether the source-of-truth for endpoints is a curl transcript or a test run.
+  - In every case, the script itself is the thing that issues each request (over HTTP, against the booted server) and reads the row's Status Code/Pass off the response it gets back — it is a live test runner that happens to also emit a workbook, not a template that gets filled in from something else. See [Build, Quality & Testing](build-quality-and-testing.md)'s completion-gate contract for why this isn't optional.
+- **`project_report.docx`** (greenfield) / **`changes_report.docx`** (brownfield, parses the change log + the xlsx) — python-docx, uniform across every mode including Node.js brownfield, which used to be the one brownfield mode with no docx step at all.
+
+Both helper scripts are one-off: written, run, verified to exist, then deleted — never meant to survive into the delivered project (the push step's `.gitignore` hardening excludes them explicitly as a backstop). Both artifacts (`api_test_report.xlsx`, `project_report.docx`/`changes_report.docx`) land under a `tests-artifacts/` subfolder of the delivered project, not its root, in every mode — greenfield and brownfield alike — so the root of a delivered project shows application code first, not generation-time tooling output.
+
+**Email placement**: the email-report step is now positioned in every mode right after the docx step, since it attaches the xlsx — it no longer textually precedes the artifact it references.
+
+## Boot verification (every mode, every language)
+
+One mechanism, uniform across brownfield and greenfield alike, and across Python/Node.js/Java: the generated application's **own** services are started via a **start script that launches them as backgrounded processes**, tracked by PID, and killed by PID — never by bringing up per-service containers via `docker compose up --build`.
+
+- **Where the start script actually runs**: natively via `execute` when the stack's runtime is on the host (this sandbox has Python natively, but not Node.js or a JDK — see [skills/docker-toolchain](../skills/docker-toolchain/SKILL.md)); otherwise as one `docker_exec` call whose `command` *is* the start script — build once if needed, launch every service backgrounded inside that same call, poll health, then either test from inside that same call (client and server share one container, so plain `localhost` reaches them) or keep the processes alive long enough for a host-side test/report script, via `docker_exec`'s `ports` argument publishing whatever ports that script needs. Because the container is discarded (`--rm`) the moment the call returns, a background process cannot outlive the call that started it — the command itself must start, wait on, test, and stop them.
+- **Infra dependencies** (a database, a broker, a cache — anything not generated code) are the one thing that legitimately still runs via `docker compose up`/`down` — see [Container image policy](#container-image-policy-docker-compose--dockerfiles-every-mode) below. When the app's own start script needs to reach that infra by its compose service name, the `docker_exec` call above passes `network` set to that compose project's network.
+- **Infra being up is never a substitute for the app's own boot.** Bringing up a database/broker container and then moving straight to report-writing — without ever issuing the start-script call in step 3 below — is a real, observed failure mode, not a hypothetical one: it produces a report that reads as an honest "Skipped: boot was not completed" but actually reflects zero boot attempts rather than a genuine failure. Infra-up is a *precondition* for step 3, never a stand-in for it.
+- **The generated `Dockerfile` per service, and any app-service entries in `docker-compose.yml`, are flag-gated deliverables** for whoever deploys the finished project (per-mode "Infra" STEPs, e.g. Java monolith's STEP 7, Java microservices' STEP 5.5) — real and correct, but never the mechanism this harness's own verification depends on. A job never fails, retries, or blocks on whether that Dockerfile happens to build; it only depends on the start script succeeding.
+- **Never probe a downstream-dependent route before its dependency is up.** In microservices mode especially, a route that legitimately calls another service (a gateway routing to a business service, a service calling a peer) will correctly 5xx/refuse if tested in isolation, before that peer is booted — that failure describes the test's own setup, not the generated app, and reporting it as a `FAIL` row manufactures a foregone-conclusion failure rather than a finding. The start script must bring up every service this route depends on (in dependency order — see each mode's own multi-service boot ordering, e.g. Java microservices' Eureka → business services → gateway last) before that route is exercised; if a mode's test step still needs an isolated single-service probe for some other reason, that probe's result is not a substitute for testing the route with its real dependency running, and must not be the row the completion-gate contract's Pass/Fail column reflects for it.
+
+Runtime steps, uniform across every mode:
+
+1. Kill any existing instance of the app's own processes (by previously-recorded PID; never a broad port-kill beyond the app's own allocated ports).
+2. When running via `docker_exec` (runtime not on the host): before anything else in that call, run the detect-then-install idiom in [skills/docker-toolchain](../skills/docker-toolchain/SKILL.md) for whatever verification client the image doesn't ship — `curl` is never preinstalled in the images this harness uses, but which package manager is actually present varies by image, so detect it rather than assuming. Skipping this step is what produces `Reason = "Skipped: ... required client tool unavailable"` rows below — that reason is an avoidable dependency gap, not a legitimate skip, and must not recur.
+3. Start the start script backgrounded (natively, or via the `docker_exec` pattern above). **This call is mandatory, not optional, and "Skipped" is never a substitute for making it.** Every one of the 3 retry attempts in step 6 below means this call was actually issued that many times — not that the agent reasoned about why it might fail and decided against trying. If anything else goes wrong while preparing for or wrapping up verification — a report-writer helper script failing for an unrelated reason (blocked by a host security policy, a missing package, a wrong working directory), a slow infra container, an unrelated tool error — that is a problem to solve or route around, never a reason to abandon this step and fall through to writing Skipped rows. Resolve the distraction (switch tool, fix the script, wait longer) and come back to this step; do not let it stand in for a boot attempt that never happened.
+4. Poll health up to 120s (Python/Node.js) / 180s (Java).
+5. On success: kill the boot-verify process once verification is done — a live deploy tunnel (where one exists) re-runs the start independently, so killing here is correct, not wasteful.
+6. On failure: diagnose with captured stderr, retry up to 3 attempts total, then continue anyway — a failed boot-verify is logged, not a hard stop. "Continue anyway" means continue the deploy/report pipeline, not fabricate the report: every endpoint row whose source-of-truth depended on this boot is still FAIL with `Reason = "Skipped: <exact reason>"`, per [Build, Quality & Testing](build-quality-and-testing.md)'s completion-gate contract — a boot-verify failure here is exactly the case that rule exists for. A missing client tool (step 2) is not one of these legitimate failure causes; treat it as a bug in the start script and fix it, not a reason to skip. `<exact reason>` must itself prove an attempt happened: name the attempt count (e.g. "3/3 attempts") and quote the actual captured stderr/exit code from the last one — a reason that only describes an outcome ("boot was not completed in this environment") with no attempt count or captured error attached is indistinguishable from never having tried, and must be treated as a contract violation, not a legitimate skip.
+7. **Tear down this job's own infra containers — `docker_compose(workdir, "down")` — before the final summary. This is mandatory whenever step 3 or the fix loop ever ran `docker compose up` for this job's infra, not optional, and not something to leave for "later" since there is no later.** A missing teardown is a real, observed failure mode, not a hypothetical one: infra services bind fixed, conventional host ports (a database's, a broker's — e.g. Kafka's `9092`, Oracle's `1521`), not a per-job dynamically-allocated port the way the app's own services get — so a container left running after one job silently breaks the *next* job's boot verification with a port-bind conflict at container startup, which then cascades into unrelated-looking timeouts and FAIL rows for a completely different project. That failure is easy to misdiagnose as a code or infra problem in the job that actually failed, when the real cause is a previous job's uncompleted cleanup. Tearing down is the same `docker_compose(workdir, "down")` call regardless of how boot verification went — success, retries exhausted, or anything in between.
+
+Node.js brownfield gets the same retry loop as Python/Java — it used to just write and `chmod` the script with no runtime check at all.
+
+## Container image policy (docker-compose / Dockerfiles, every mode)
+
+Every image a generated project's `docker-compose.yml` or Dockerfile pulls — a database (Oracle, Postgres, MySQL, MongoDB, ...), a broker (Kafka, RabbitMQ, ...), a cache (Redis, ...), or anything else infra-shaped — must be freely pullable: no paid tier, no registry login, no vendor account. This is a target-design rule, not a harness quirk: a generated project that only boots for someone who happens to have paid registry credentials is broken for everyone else who tries to run it.
+
+- **Oracle**: use `gvenzl/oracle-free` (or `gvenzl/oracle-xe` for an older target) from Docker Hub, never `container-registry.oracle.com/database/...` — the official Oracle registry requires an authenticated login and fails boot verification outright with an HTTP 401, which is not a fixable error, just the wrong image.
+- The same test applies to every other engine/broker/cache choice: if pulling the image a project's compose file names would prompt for credentials or a paid plan, it's the wrong image for that role — substitute the nearest free, unauthenticated equivalent instead of accepting the failure downstream (and letting the completion-gate contract above turn every dependent row into a boot-failure `FAIL`).
+- When `database.engine` (or an equivalent config field) names a vendor whose free image differs from its paid one in meaningful ways — a smaller feature set, a different default port, a different startup/readiness signature — note that substitution once in the mode's own STEP output rather than silently pretending it's the vendor's full paid product.
+
+## API run / test execution (greenfield)
+
+Covers the actual test-execution instructions once test files exist, for FastAPI, Django, and Tornado. FastAPI's curl branch enforces ngrok-first ordering (start ngrok → patch env → start server → run tests — never reversed). Django and Tornado share a start-server helper (backgrounded, logged, any HTTP status counts as "up") and both warn against foregrounding `start.sh` or waiting on the server PID combined with a kill, since their dev servers never return control to the shell. FastAPI additionally writes an Azure-DevOps-deferred Dockerfile once every test has passed, requiring `EXPOSE 8000` (Container Apps' fixed target port, independent of the job's allocated port).
+
+Flask, Bottle, and Node.js run their own test-execution text as part of their testing-framework step instead (see [Build, Quality & Testing](build-quality-and-testing.md)). Brownfield doesn't use this section either — each brownfield mode's own server-start-and-test step is self-contained. Neither Java mode has its own test-execution prose at all; both point at the "Boot verification" section above for the mechanics (start script, never `docker compose up --build` for the app's own services) and at [Build, Quality & Testing](build-quality-and-testing.md#java-testing) for the JUnit/curl content itself.
+
+## Optional infra scaffolding (greenfield)
+
+Three independent, flag-gated additions, available to FastAPI/Django/Tornado (not Flask/Bottle/Node.js/Java):
+
+- **Unit tests**: pure-logic tests (validators, calculations, model methods), no running server, explicitly separate from the API-level suite. Django's variant marks DB-touching cases appropriately for its test runner.
+- **CI workflow**: writes a CI config — checkout, language setup, install, a compile/check scan, plus a unit-test step if unit tests are also enabled. Self-contained — no secrets or external services required.
+- **Azure DevOps Dockerfile deferral**: when Azure DevOps is enabled, FastAPI's normal Dockerfile write is replaced with a note deferring it to the API-run step above, since the smoke-tested Dockerfile Azure DevOps needs is a different shape than the plain one would otherwise produce.
+
+Every one of these flags is honored exactly as requested — a mode that doesn't explicitly gate on one of them silently doesn't offer it. Check what a new mode gates on before assuming it inherits these for free.
+2026-09-28 10:05:37,719 INFO deepagent.transcript: [tool] (name=read_file) @@ lines 1-182 of 182 @@
+---
+name: docker-toolchain
+description: Run a generated project's install/lint/test/build steps inside a minimal, disposable Docker container matched to its tech stack, instead of requiring that stack's language runtime on the host OS. Use whenever the AI SDLC's linting, testing, or fix-loop steps need a runtime (Python, Node.js, Java) that may not be installed on the host.
+version: 1.0.0
+requires: Docker CLI on host (containers run tech-stack runtimes, not the host OS)
+---
+
+# Docker toolchain
+
+Gives the coding agent a way to "install" and use a tech stack's runtime — Python, Node.js, or a JDK — as a disposable container, instead of installing it onto the host OS. Every container is ephemeral (`--rm`); nothing of the container itself persists. Two things do persist across calls, deliberately: the pulled image layers, and — mounted as a named Docker volume, auto-managed by `docker_exec`, keyed by which ecosystem `image` names — that ecosystem's package-manager cache (`~/.gradle`, `~/.m2`, pip's cache, npm's cache). Without that second one, every single call would re-download the whole dependency tree from scratch; with it, only the first call in a job pays that cost. A third thing can persist too, if you build it yourself: a derived image layering an extra client tool (`curl`, `jq`, ...) onto a base image once, instead of installing it fresh in every container that needs it — see "Never assume a client tool is preinstalled" below.
+
+**A persistent cache shared across ephemeral, separately-killed containers has one hazard, already handled for you**: each container's PID namespace resets to 1, so if an earlier call gets killed mid-build (a boot-verification timeout, a fix-loop retry) before its package manager releases a lock file in that shared cache, a *later* container's own process can end up with a coincidentally-reused PID that makes the stale lock look like it's still held by something alive — deadlocking every later call that touches the same cache entries. Confirmed in practice for Gradle (`*.lock` under `~/.gradle/caches`, surfaced as a boot-verification attempt failing with a file-hash-cache-lock error after a previous timed-out attempt). `docker_exec` clears each ecosystem's own known stale-lock/partial-transfer files automatically before every call now, so this doesn't need a workaround in the command you write — just know that if you ever see a lock-related error from Gradle/Maven/npm/pip anyway, it's an infrastructure symptom of this class, not something your code caused.
+
+**Every `docker_exec` call also transparently sets each ecosystem's own network timeout/retry knobs** (Gradle: `GRADLE_OPTS`; Maven: `MAVEN_OPTS`; npm: `npm_config_fetch_*` env vars; pip: `/etc/pip.conf`) — a short (~60s) per-attempt timeout with a few retries, instead of the only safety net being `docker_exec`'s own flat, whole-call timeout with no retry at all, which meant one hung dependency-repository connection could silently burn the entire call before failing. Gradle's own daemon is also disabled this way (`-Dorg.gradle.daemon=false`): a background daemon is pure overhead in a container that's discarded the moment the call returns, and was observed to occasionally leave a container unable to exit cleanly. None of this needs anything added to the command you write.
+
+**One Gradle-specific gotcha worth knowing even though it's already handled**: the official `gradle:<version>-jdk<n>-alpine` Docker Hub image (as opposed to running the Gradle wrapper on top of a plain `eclipse-temurin` JDK image) bakes `/root/.gradle` as a symlink to `/home/gradle/.gradle`, and separately declares `/home/gradle/.gradle` as its own Dockerfile `VOLUME` — an ordinary volume mount at `/root/.gradle` never reaches the real directory, so every call silently got a throwaway anonymous volume instead, discarding the *entire* Gradle cache (wrapper distribution and dependency cache alike) every single time, with no visible error. `docker_exec` now mounts the cache volume at both paths, so this works regardless of which of the two Java base images ends up used — but if you're ever choosing between them for a *new* derived image, prefer `eclipse-temurin` + the Gradle wrapper (per the image table above): it doesn't have this footgun and doesn't need a pinned Gradle version baked into the image at all, since the wrapper handles that.
+
+## Why containers instead of host installs
+
+The host running this agent is not provisioned with all 11 tech-stack runtimes, and won't be — installing/uninstalling language runtimes on the host for each job is slow, leaves drift behind, and one job's toolchain (say, an old Node version) shouldn't collide with another's. A pinned, minimal image per stack sidesteps all of that: pull once, run many times, leave no trace on the host beyond the image cache.
+
+**This is a per-host default, not a hard requirement, and it's a toggle, not something you as the agent choose per call.** When `SDLC_AGENT_EXECUTION_MODE=sandbox` (a host-level setting — see `.env.example`), `docker_exec` transparently runs the exact same command directly on the host instead, whenever a matching native toolchain is already on PATH, falling back to the normal containerized path per call otherwise (missing/mismatched toolchain, or any call passing `network`, since only a real container network can reach compose infra by service name). This is invisible to you: `docker_exec`'s contract, arguments, and return format never change — write commands exactly as this skill already describes either way. It exists for a host that's specifically provisioned for the stacks it generates (e.g. a persistent Ubuntu worker with the right JDK/Node/Python already installed), where a native process is faster precisely *because* its package-manager cache is an ordinary, already-persistent directory in `$HOME` rather than something a `--rm` container has to be specially configured not to discard.
+
+**"Minimal" is a hard preference, not a suggestion**: always pick the smallest official image that still has the tools a step needs (`-slim` / `-alpine` variants), never a full desktop/OS-flavored base, and never `:latest` — pin a real tag so a job run today behaves the same next month.
+
+## Image per tech-stack mode
+
+| Mode(s) | Image | Notes |
+|---|---|---|
+| FastAPI, Django, Tornado, Flask, Bottle (greenfield); Python (brownfield) | `python:3.13-slim` | `pip install` needs network inside the container |
+| Node.js/Express (greenfield); Node.js (brownfield) | `node:22-slim` | use `npm ci` when a lockfile exists |
+| Java monolith, Java microservices (greenfield); Java (brownfield) | `eclipse-temurin:21-jdk-alpine` | JDK, not JRE — build/test steps compile |
+
+If a job's declared version differs from the table (e.g. Python 3.11 instead of 3.13), swap the tag, not the family — check [reference/03-tech-stack-versioning.md](../../reference/03-tech-stack-versioning.md) for how versions get pinned.
+
+**Never assume a client tool (`curl`, or any other verification-time dependency) is preinstalled in a verification image** — confirmed failure mode: an alpine-based image fails a health/API check with `sh: curl: not found`. Rather than hardcoding which package manager a given image family uses (stale the moment an image tag or base distro changes), detect-then-install at the very start of the start script's `command`, before anything else:
+
+```sh
+command -v curl >/dev/null 2>&1 || {
+  (command -v apk >/dev/null 2>&1 && apk add curl) ||
+  (command -v apt-get >/dev/null 2>&1 && apt-get update && apt-get install -y --no-install-recommends curl) ||
+  (command -v yum >/dev/null 2>&1 && yum install -y curl) ||
+  (command -v dnf >/dev/null 2>&1 && dnf install -y curl)
+}
+```
+
+**Never pass `apk add --no-cache`** — confirmed by direct reproduction: that flag is precisely what makes `apk` re-fetch the whole package index (`APKINDEX.tar.gz`, ~10s+ each time) and every package's `.apk` file on *every single call*, even though `docker_exec` already mounts a persistent cache volume at `/var/cache/apk` for any alpine-based image. Plain `apk add curl` (no flag) uses that mount automatically — no `/etc/apk/cache` symlink or other setup needed — and a second call becomes a sub-2-second pure cache hit with zero network activity. The same applies to `apt-get` on a Debian-slim image, for a different underlying reason: `docker_exec` also removes that image's own `/etc/apt/apt.conf.d/docker-clean` policy (which deletes every downloaded `.deb` immediately after install, by design, to keep image layers small) and mounts both `/var/lib/apt/lists` and `/var/cache/apt/archives`, so the `apt-get update && apt-get install` idiom above already benefits from this without needing any change to the command itself.
+
+The same check-then-install idiom applies to any other client tool a verification step needs (`jq`, a messaging-broker CLI, ...), not just `curl` — swap the tool name and its package name, keep the detection chain. This must never silently downgrade a report row to `Skipped: ...` — a missing tool is a start-script gap to close, not a genuine skip. If a check needs more than the app's own language client (normally a throwaway script in the app's own language, installed the same way its other dependencies are), install that client with the same idiom, in the same `docker_exec` call, before using it.
+
+**This install cost repeats on every call to the same image, since only the package-manager dependency cache persists — not the OS package layer.** For an image reused many times in one job (a Java job's build/lint/boot-verify/fix-loop calls all share one JDK image, for instance), paying the detect-then-install cost on every single call adds real wall-clock time for no benefit after the first. Instead, the first time a job finds it needs a tool the base image doesn't ship, build a derived image once and reuse its tag for every later `docker_exec` call in the job, instead of the base image:
+
+```sh
+docker build -t sdlc-agent-toolchain:gradle-8.11.1-jdk21-alpine - <<'EOF'
+FROM gradle:8.11.1-jdk21-alpine
+RUN apk add --no-cache curl
+EOF
+```
+
+Run this via `execute`, not `docker_exec` — it needs the host's own Docker daemon, not a disposable container — right after the job's `docker_pull` of the base image. Passing `-` as the build context (instead of `.` or a real path) makes this a context-less build straight from the heredoc, so it's immune to `execute`'s own working directory and never tars up an unrelated directory as build context. Tag it descriptively enough to show exactly what's layered on (base image + tool list) so it's obvious what a given tag contains; every subsequent `docker_exec` call in the job then names that tag as its `image` instead of the base one.
+
+## Tools exposed by this skill
+
+### 1. `docker_pull`
+
+**When to use:** once, before the first `docker_exec` call for a given image in a job — makes the "install" step explicit and its failure (network, bad tag, Docker not running) visible on its own, instead of buried inside a lint/test step's output.
+
+**Input schema:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "string",
+      "description": "Fully tagged image, e.g. 'python:3.13-slim'. Never 'latest'."
+    }
+  },
+  "required": ["image"]
+}
+```
+
+**Behavior:** runs `docker pull <image>`. Idempotent — a no-op if already pulled.
+
+### 2. `docker_exec`
+
+**When to use:** any install/lint/test/build command for a stack whose runtime isn't on the host — dependency install, `ruff`/`eslint`/`checkstyle`, `pytest`/`npm test`/`junit`, or a build step.
+
+**Input schema:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "string",
+      "description": "Fully tagged image to run the command in, e.g. 'node:22-slim'."
+    },
+    "workdir": {
+      "type": "string",
+      "description": "Project directory to mount, as a path under /outputs/ (e.g. '/outputs/todo-api'). Never a path outside /outputs/."
+    },
+    "command": {
+      "type": "string",
+      "description": "Shell command to run inside the container, e.g. 'pip install -r requirements.txt && pytest'."
+    },
+    "network": {
+      "type": "string",
+      "description": "Optional. Join an already-running `docker compose` project's network (e.g. '<project>_default') so processes started by `command` can reach infra dependencies by their compose service name. Omit for plain install/lint/test/build calls."
+    },
+    "ports": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Optional. Publish ports to the host, each as 'host:container' (e.g. '8081:8081'), so a host-side test/report script can reach a service `command` starts. Omit for plain install/lint/test/build calls."
+    }
+  },
+  "required": ["image", "workdir", "command"]
+}
+```
+
+**Behavior:** mounts `workdir` read-write at `/workspace` inside the container and runs `command` there via `sh -c`, with `--rm` so the container is discarded afterward. Returns exit code, stdout, and stderr.
+
+**Guidance:**
+
+- One `docker_exec` call per logical step (install, then lint, then test) rather than one giant chained command — makes fix-loop failures attributable to a specific step.
+- Only ever mount a path under `/outputs/`; never the agent's own project or the `aisdlc/` reference docs.
+- If `docker` isn't on the host's PATH at all, this skill doesn't apply — fall back to whatever host-native tooling is available and say so, rather than failing the job outright.
+- For a multi-module build/test command (any Java greenfield/brownfield mode), add `--parallel` (Gradle) so independent modules compile/test concurrently across the host's CPU cores within that one call, and `--build-cache` so Gradle's own task-output cache lives inside the same persistent `~/.gradle` volume this skill already mounts (see above) instead of going unused — a later call that only touched one module can then pull the other modules' unchanged task outputs straight from that cache instead of reprocessing them. Both are real wall-clock savings, no correctness change. This is unrelated to, and doesn't conflict with, the fix loop's own rule of re-testing only one failing module at a time (see [capabilities/build-quality-and-testing.md](../../capabilities/build-quality-and-testing.md)) — that rule is about which module you *target*, not whether Gradle may parallelize or cache the modules it does build.
+- **Starting the app's own services for testing** is one `docker_exec` call whose `command` is a start script: use the job's derived tool image (see above) so `curl` and any other client tool the test step needs is already present, instead of repeating the detect-then-install idiom on every boot-verification/fix-loop call — then build once if needed, launch every service as a backgrounded process (`&`) inside that single call. **Poll each one's health instead of a blanket `sleep N`** — a fixed sleep always pays the worst-case wait even when a service is actually ready in a fraction of that time, and defaulting to `sleep` here (rather than writing out the poll loop) is the single most common way this step ends up slower than it needs to be:
+
+  ```sh
+  for port in 8081 8082 8083 8084; do
+    i=0
+    until curl -fsS "http://localhost:$port/actuator/health" >/dev/null 2>&1 || [ "$i" -ge 90 ]; do
+      i=$((i + 1)); sleep 2
+    done
+  done
+  ```
+
+  Swap the health path and the iteration ceiling for the stack's own convention and the mode's documented timeout (120s Python/Node.js, 180s Java — see [capabilities/reports-and-deploy.md](../../capabilities/reports-and-deploy.md#boot-verification-every-mode-every-language)); the loop still exits the moment every service is healthy rather than always waiting the ceiling. Then either run the API tests from inside the same command (`curl` against `localhost:<port>`, since client and server share one container) or leave the processes running long enough (`sleep`/`wait`) for a host-side test/report script to hit the `ports` this call published. Pass `network` set to the infra's compose network so these processes can reach a database/broker by its compose service name. Because the container is torn down (`--rm`) the moment `command` returns, the command itself must be the thing that installs, starts, waits on, tests, and stops the processes — a background process cannot outlive the call that started it.
+
+### 3. `docker_compose`
+
+**When to use:** booting/tearing down only the project's **infra dependencies** — a database, a broker, a cache, anything from `docker-compose.yml` that isn't the generated application code itself (Oracle, Kafka, Redis, ...). These have no native-process alternative in this sandbox, so they're the one thing `docker compose up`/`down` is still for. Since one `docker-compose.yml` still declares both infra and the app's own (deliverable-only) service entries, name the infra services explicitly in `command` (`up -d oracle kafka`, not a bare `up -d`) — an unqualified `up`/`down` would also touch the app entries this mechanism deliberately bypasses.
+
+**Every `up` in a job must be matched by a `down` before that job ends — mandatory, not an example-flow nicety.** Confirmed failure mode: a job brings infra up, finishes its own testing, and never calls `docker_compose(workdir, "down")` — the containers keep running (`docker ps` shows them `Up` long after the job's process exited) and keep holding their fixed host ports (Kafka's `9092`, Oracle's `1521`, ...). The *next* job that needs the same infra type then fails to bind those ports, and that failure shows up as that unrelated job's own boot verification timing out or its Kafka checks failing — a port conflict inherited from a previous job's skipped cleanup, misdiagnosed as a fresh bug in a project that never had one. See [capabilities/reports-and-deploy.md](../../capabilities/reports-and-deploy.md#boot-verification-every-mode-every-language) step 7 for exactly where this belongs in the sequence.
+
+**Never use it to build and run the app's own services** (`up -d --build` bringing up each service from its own Dockerfile) as the mechanism for boot-verification / API-testing — that rebuilds a full image per service on every run and is the single biggest time sink in a job (docker image builds plus per-container test runs regularly account for the majority of a run's wall-clock time). The generated `Dockerfile` per service and the app-service entries in `docker-compose.yml` are flag-gated **deliverables** for whoever deploys the finished project — real, correct, and generated — but this harness's own verification never depends on them. See [capabilities/reports-and-deploy.md](../../capabilities/reports-and-deploy.md)'s "Boot verification" section for what the agent uses instead: a start script run via `docker_exec`.
+
+**Input schema:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "workdir": {
+      "type": "string",
+      "description": "Project directory containing docker-compose.yml, as a path under /outputs/ (e.g. '/outputs/todo-api')."
+    },
+    "command": {
+      "type": "string",
+      "description": "Arguments after 'docker compose', e.g. 'up -d', 'down', 'ps', 'logs oracle --tail 100' — for the project's infra services, not its own generated services (see 'When to use' above)."
+    }
+  },
+  "required": ["workdir", "command"]
+}
+```
+
+**Behavior:** runs `docker compose <command>` with the real OS working directory set to `workdir` — never via a shell `cd` or a `-f <path>` flag.
+
+**Use this instead of `execute` for every docker-compose command, with no exception.** `execute` runs on a real host shell, and passing a virtual `/outputs/...` path as a CLI argument to a native binary on that shell (e.g. `docker compose -f /outputs/.../docker-compose.yml up -d`) gets mangled into a bogus real path on this host (observed: `/outputs/foo/docker-compose.yml` → `C:\outputs\foo\docker-compose.yml`, which doesn't exist — the real path has a long prefix before `outputs`). That failure looks exactly like a genuine "file not found," so it's easy to mistake for the compose file actually being missing and move on — it's not; it's this specific path-argument bug. `docker_compose` sidesteps it entirely by setting the real working directory directly, never passing the path as an argument at all.
+
+## Example usage flow
+
+1. Detect the job's tech-stack mode (e.g. FastAPI) and look up its image (`python:3.13-slim`).
+2. `docker_pull` that image once — and if the verification step needs a client tool the base image doesn't ship (`curl`, `jq`, ...), build a derived image on top of it once here too (see "Never assume a client tool is preinstalled" above) and use that tag for every later `docker_exec` call in the job instead of the base image.
+3. `docker_exec` the dependency install (`pip install -r requirements.txt`).
+4. `docker_exec` lint (`ruff check .`), then test (`pytest`) — per the AI SDLC's own STEP sequence for that mode.
+5. On failure, feed the returned stdout/stderr into the fix loop (see [capabilities/build-quality-and-testing.md](../../capabilities/build-quality-and-testing.md)) and re-run only the failing `docker_exec` step, not the whole sequence.
+6. If the project declares infra (a database, a broker, ...), `docker_compose(workdir, "up -d oracle kafka")` naming those infra services explicitly — never a bare `up -d` (which would also bring up the app's own compose entries) and never `--build` for the app's own services.
+7. For the boot-verification / API-testing step, one `docker_exec` call whose `command` is the start script — build once, launch every service backgrounded, poll health — with `network` set to that compose project's network and `ports` publishing whatever the report/test step needs to reach from the host. Then test against those published host ports (e.g. `http://localhost:8080/...`) — see [capabilities/reports-and-deploy.md](../../capabilities/reports-and-deploy.md)'s "Boot verification" section for what "real HTTP request" testing actually requires, and for the full start-script/PID-lifecycle contract.
+8. Tear down: kill the app's processes (the `docker_exec` call above already did this itself before returning, or a follow-up call issues the kill), then `docker_compose(workdir, "down")` for the infra.
+2026-09-28 10:05:47,967 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+2026-09-28 10:05:48,106 INFO deepagent.transcript: [ai] tool_calls=[write_file({'file_path': '/outputs/job-d559a533-f213-4744-9e90-c578859a7a58/checkpoint.md', 'content': '# Checkpoint\n\n| Step | Status |\n|---|---|\n| 1 Design | Complete |\n| 2 Build/config | Pending |\n| 3–5 Implementation | Pending |\n| 6 Seed data | Pending |\n| 7 Infra/start scripts | Pending |\n| 9 Documentation | Pending |\n| 10–14 Verification/fix loop | Pending |\n| 15 Reports | Pending |\n\n## Decisions\n- Java 21 / Spring Boot 3.4.0 / Gradle 8.11.1; package `com.enterprise.hr`; app port 8080.\n- MySQL 8.4 is external infra, `mysql` compose service. JWT stateless security uses `ROLE_HR`, `ROLE_MANAGER`, and `ROLE_EMPLOYEE` only.\n- Packages: domain, dto, repository, service, controller, security, exception, config.\n- Independent implementation groups: identity/organization; attendance; leave workflow; payroll; performance cycles; reporting. Shared API contract: JSON `/api`; error `{timestamp,status,error,message,path}`; ISO-8601 dates/times; DTOs never expose password hashes.\n- Domain entity contract: generated Long ids. Roles exactly HR/MANAGER/EMPLOYEE and leave statuses exactly PENDING/APPROVED/REJECTED.\n'})] [{'id': 'rs_0fd1f732dc10d602006aba3bf283c487d295033c9f398ec8f4', 'summary': [], 'type': 'reasoning', 'content': [], 'encrypted_content': 'gAAAAABqujv7IMO7_9agZZiwQ1q274cCRZ1JdDHQ8EMTs0ghFGWnGpZNJIq2mb3gt4H0xDw_-gx8nLS61VO_QO1NOQpsVWDHNqn_hKTReyrTtwCNc2FajggXiQz4iP_-_wY5kXH8TOJFVsowQTw_5Io4Cn7Ry54yBDoGguKjPMyfjNHZ6zKQjFm2gE2y9fa7ldSPHW6qV7YDFH1KlS90oN3m2pxtJU2zdMYO3w9r4WkidfdespUIxsgFL-Il2pvivFn34hGSkRaAm1dPgFjQAVp-vxC6zI2tXR5AFMILYmfn1k72m5aUDrZUpw8xSmQRtYeb_1Xf32DAOb0AMOtxtADXfSZmoYrKwj7xLcdTo81vTdpTW8vYB1fSxAoSXF7MtIpPbIKq8ZRh3_XjJlRHpJnIZBOYq46rq6uFcC4C-5B2ystYwulRutRQu7yHNaU5_hkqjLetdhC_CKX-BuqVTad2fm20yBjw6yV42bVC-pPkUWXTCO6lLpbEj8eDTxEi4re6Ushk1RuN-wO9FKBrPTclhLv57jw6yxXR1vQme6WgcgxBZMqHF2XuJTjs4sYkw74YkSEsApQJmqsfjxbIBAuOwZKVms6Bx-gYaRaQZCXA7G1juZoSzTvTE1Sg31kZgXcYrDOmROlD_K6rX2LY6ZkxI6XX6rPXEe2aF7LnKWAna1bGqwXnafBFYBCKl1x-ocf-37OA8vBXqQWSCQ6MjwD4hdOAllCm0tJcqD9TpwD_XJ3BQommkwJ8zx_TIepthV1RfFegkUz1hli956KA5RvA2iogF64p277Y85smooQCrHJKDeZ1zOjr6QTrTZ8zLvas1XOl-VoyC6uAEp-9JrClZSo3M33_yS86io3pVzJXisHXD_urslA6taWdLAOj5VdizBX6LPZVNqeIwLYDdnw-jSFaBlO5UN_aH5ccZuaz9iIoCZzP9pwwfGhj-onvRIDgzC3LZ0bce4WuC45sGiPWbU8tAQnfmS_CDTDckpkujlDFMC7T9T75gidXhgt0Bl8UJqWYVl7NtMqE6aMhYs4tWnQi9NwCRcy-ok2KNbdv7daNbmOpX0fakPBYsV4ksvFXbS_0O2OMZx13UwhOlvutY7pZcRNeYQ14B2fSyFGRe10nxzlECAOf7KGKhlpe_u1MZjIKbUd1wazqQb5cBcSSUwth78uFLbZl2zDt8DytUroIQHYOQQu7Nk0WDpYzQPi5xaJ4TNiEd6ueFSD9WZMypOrMK2N2m2Zwe4reOwqrI7iuNsFSyYVfhZSQ_1T1Qn-2a7FpoNU2pvZudzCgBGqDFCbHfp8B6VvSHls46wph3Td7p60Zeb2vVEoB1qPPTPVSPQj0M918oe_0tTPQLzgY9Wx-4Urd1PTAX0u72Z7Sp-z2aWBxyDTT7qZp1pLKoYqn3iXxfqUWa4YvceBg8leNkMrOm_a3jw36tiJOlq7sFBNwm8U53_-1QcZf4qabupD9jCKpi8Qx4AYV8Qy4klZPa3QA1eNz2WLOedBCKYxAVpyPHr_rcuSHgSq9NkHtiO0EF97zF0WtPNY8MSWb6sQN2X9GE4UrnAb8BdYAE57b-DeMmpwGIvUHSyOsUNlgWeGbZpPuVYnPDMDrH6hMUTFLi3r0QPjDC6xfliBdgcwabiDB24stGx5RtXpHsDwEhodxKnb57_hbmZnbJ7vC-PjWFdYQMLTU7e5tU9joNyH0blGPaLtOZrs3J5Yq7g6F3GHsbSpr7OegbCx_kxPQMI7FyCGNK-bdzR7A0LVSq8g8st332QqctludEmFJrUVH5guHBiJXRB4V_zltxC3mX57az9VXCJ4pVr9d9--wsQFiDSbYi4Iys5QvasC8B_ytO2Eccmk_V5zTYmc-_MM2A6ZdaQyqYcYCtGodjKAUnnP_-F11tmWaEEaMBe72Ji9dbuTTPcBl89q2w4b4m7IPXK7zhjaHn8xSGi4C6MWcthpNYzu0gaBbR_fF6UUeo1WwhJ4su1BFTgTO5I8qA0bIC8blQcoG5HZgJnqWTk9su46D5I9j6CVV7NtM2Ef2odRb-sMHb6a6mzg6yfIS4fWdxAnteytw34SXpM3cEaTnc-fZQUcutc5c1rbEm-9rYMwrX5jAYvp87Fpa6MRDXJB-HEBWZezv3FmC61ECzdWSNdS7vkGgALB3HcKrVw0t69MIkgZFqTfGAXBtz06XZOyeoCraBOBYljiSpDgr5yXykQDIJzlOD4pL_i1fQt2fPGIH674QNwlbFNN8Hq22toHuZbVLVz8Z0iDmuYAwUAeLDsTqSyNyT_Mp-uY2ga_IyZvxC7mN__VNu9fih-fiiyw-UmAmQNqv-SOGq7Kgaitq_ftRHWSuNjmsHZO2rmNz7R5wWS5monBLHj2WaFTrVJ3YHqcp8sUUOJAiGx8rcfqNPhvug3l-8z_07eRonQ-mNTgQcinOwHzbs5iJBpQhxDvpq7OY-55Wak3e5kVwuwjDkrKkjpuU2ngKKZGHTMtpxVuD_YnLISwn_uhfoTbjxkGW3XTT2EZBrXCbiIy7ItX7BcVmQpGl59tGYQkeKCBf-gI-4ioeK1RPZMrFby9vN7BDMXo2sOinq8o3r4pqQ1sUbQMDOjcWP1dk2TjQXEA6nbrZ2YfysG0yUa6NXUWaRPMZX622aqr_KizVZwjntS1mSYgougKwzPf-VFZQH4MH3HM84joh7Yar1-T0bz9ifSwsZ2NRIj5tATkay-wsmIWCcIgiOODSkXIRcjCHnODEjgvFwVtrZbwujvFtLmjTijTn8iL5HSB60L-kgr_nt0y023-bBVoaHGUMZw5ijG39ZpP7PrHxQknufOx4ppz8JR-AeyLYEnA2pXe6oIKpjTZTO6t-AQzgoljezF192xWKUFTDrC7VetICNZVKpepWUVM-uToNU_4B674Gan_OrUQ1EmUdzDED93LdFd5X9xzPiywOetVoKrAJJbp3rj6kS-MzZYA1mGwcqrwdEA9PTRAksZ5_YehgBBmOH1V2TC3ITJUf6WLFrQcfjhxZSWXbQ-i7HSXLr-JrTbaFomY-5zNQQnllBJGF-RDYTl7G55H3Fjs0xRvNN2Rspj0mDxn7UhqdCq23ErN-t5sZ7OySKqDTpwxBYDCHMl3aN_Hz3g7oyfzRmlDbN6SCdk6w0xIe4r-934YnRq-O0azLjJPHKVKTZWuuEJ4B66MK_lQck4u840-rpzzr2m81bnoZP7ek8BAcv3H0vDeAqxQYnHx0uIL8-ZEPetmTLSeZv_A='}, {'arguments': '{"file_path":"/outputs/job-d559a533-f213-4744-9e90-c578859a7a58/checkpoint.md","content":"# Checkpoint\\n\\n| Step | Status |\\n|---|---|\\n| 1 Design | Complete |\\n| 2 Build/config | Pending |\\n| 3–5 Implementation | Pending |\\n| 6 Seed data | Pending |\\n| 7 Infra/start scripts | Pending |\\n| 9 Documentation | Pending |\\n| 10–14 Verification/fix loop | Pending |\\n| 15 Reports | Pending |\\n\\n## Decisions\\n- Java 21 / Spring Boot 3.4.0 / Gradle 8.11.1; package `com.enterprise.hr`; app port 8080.\\n- MySQL 8.4 is external infra, `mysql` compose service. JWT stateless security uses `ROLE_HR`, `ROLE_MANAGER`, and `ROLE_EMPLOYEE` only.\\n- Packages: domain, dto, repository, service, controller, security, exception, config.\\n- Independent implementation groups: identity/organization; attendance; leave workflow; payroll; performance cycles; reporting. Shared API contract: JSON `/api`; error `{timestamp,status,error,message,path}`; ISO-8601 dates/times; DTOs never expose password hashes.\\n- Domain entity contract: generated Long ids. Roles exactly HR/MANAGER/EMPLOYEE and leave statuses exactly PENDING/APPROVED/REJECTED.\\n"}', 'call_id': 'call_MRgMTN5q82OrWNTKmUR4FwOU', 'name': 'write_file', 'type': 'function_call', 'id': 'fc_0fd1f732dc10d602006aba3bf7a4b087d2a413cb116edd2a98', 'status': 'completed'}]
+2026-09-28 10:05:48,114 INFO deepagent.transcript: [tool] (name=write_file) Updated file /outputs/job-d559a533-f213-4744-9e90-c578859a7a58/checkpoint.md
+2026-09-28 10:05:49,901 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+2026-09-28 10:05:50,055 INFO deepagent.transcript: [ai] tool_calls=[git_commit({'project_path': '/outputs/job-d559a533-f213-4744-9e90-c578859a7a58', 'message': 'Record initial design decisions'})] [{'arguments': '{"project_path":"/outputs/job-d559a533-f213-4744-9e90-c578859a7a58","message":"Record initial design decisions"}', 'call_id': 'call_OPgrm2zkVzJhV8pYaAboxY9I', 'name': 'git_commit', 'type': 'function_call', 'id': 'fc_0fd1f732dc10d602006aba3bfd3ee487d28ac4b0ac1da8031e', 'status': 'completed'}]
