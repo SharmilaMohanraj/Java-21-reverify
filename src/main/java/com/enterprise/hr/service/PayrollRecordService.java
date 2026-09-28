@@ -9,10 +9,9 @@ import com.enterprise.hr.exception.ResourceNotFoundException;
 import com.enterprise.hr.repository.PayrollRecordRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.util.List;
+import org.springframework.stereotype.Service;
 
 @Service
 @Transactional
@@ -30,7 +29,7 @@ public class PayrollRecordService {
         validateBusinessRules(request);
         PayrollRecord record = new PayrollRecord(
                 findEmployee(request.employeeId()), request.periodStart(), request.periodEnd(),
-                request.grossPay(), request.deductions(), request.netPay(), request.paidAt());
+                request.grossAmount(), request.deductionAmount(), request.netAmount(), request.paidAt());
         return toResponse(payrollRecordRepository.save(record));
     }
 
@@ -50,9 +49,9 @@ public class PayrollRecordService {
         record.setEmployee(findEmployee(request.employeeId()));
         record.setPeriodStart(request.periodStart());
         record.setPeriodEnd(request.periodEnd());
-        record.setGrossPay(request.grossPay());
-        record.setDeductions(request.deductions());
-        record.setNetPay(request.netPay());
+        record.setGrossAmount(request.grossAmount());
+        record.setDeductionAmount(request.deductionAmount());
+        record.setNetAmount(request.netAmount());
         record.setPaidAt(request.paidAt());
         return toResponse(payrollRecordRepository.save(record));
     }
@@ -78,18 +77,19 @@ public class PayrollRecordService {
         if (request.periodEnd().isBefore(request.periodStart())) {
             throw new BusinessRuleException("Period end must not be before period start");
         }
-        if (request.grossPay().signum() < 0 || request.deductions().signum() < 0 || request.netPay().signum() < 0) {
+        if (request.grossAmount().signum() < 0 || request.deductionAmount().signum() < 0
+                || request.netAmount().signum() < 0) {
             throw new BusinessRuleException("Payroll amounts must not be negative");
         }
-        BigDecimal expectedNetPay = request.grossPay().subtract(request.deductions());
-        if (expectedNetPay.compareTo(request.netPay()) != 0) {
-            throw new BusinessRuleException("Net pay must equal gross pay minus deductions");
+        BigDecimal expectedNetAmount = request.grossAmount().subtract(request.deductionAmount());
+        if (expectedNetAmount.compareTo(request.netAmount()) != 0) {
+            throw new BusinessRuleException("Net amount must equal gross amount minus deduction amount");
         }
     }
 
     private PayrollRecordResponse toResponse(PayrollRecord record) {
         return new PayrollRecordResponse(
                 record.getId(), record.getEmployee().getId(), record.getPeriodStart(), record.getPeriodEnd(),
-                record.getGrossPay(), record.getDeductions(), record.getNetPay(), record.getPaidAt());
+                record.getGrossAmount(), record.getDeductionAmount(), record.getNetAmount(), record.getPaidAt());
     }
 }

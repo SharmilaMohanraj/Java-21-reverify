@@ -9,9 +9,9 @@ public record PayrollRecordResponse(
         Long employeeId,
         LocalDate periodStart,
         LocalDate periodEnd,
-        BigDecimal grossPay,
-        BigDecimal deductions,
-        BigDecimal netPay,
+        BigDecimal grossAmount,
+        BigDecimal deductionAmount,
+        BigDecimal netAmount,
         Instant paidAt
 ) {
 }

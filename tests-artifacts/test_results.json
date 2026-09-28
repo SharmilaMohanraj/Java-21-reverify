@@ -25,5 +25,23 @@
     "Status Code": 200,
     "Pass/Fail": "PASS",
     "Reason": "Observed HTTP 200; expected one of [200]"
+  },
+  {
+    "#": 4,
+    "Method": "N/A",
+    "Endpoint": "",
+    "Description": "Gradle JUnit test suite after verifier remediation",
+    "Status Code": "N/A",
+    "Pass/Fail": "PASS",
+    "Reason": "Observed ./gradlew test --no-daemon exit code 0 on 2026-09-28."
+  },
+  {
+    "#": 5,
+    "Method": "N/A",
+    "Endpoint": "",
+    "Description": "Database-backed application boot verification",
+    "Status Code": "N/A",
+    "Pass/Fail": "FAIL",
+    "Reason": "Skipped: boot failed after 3/3 attempts; last captured error: com.mysql.cj.jdbc.exceptions.CommunicationsException: Communications link failure (Connection refused localhost:3306)."
   }
 ]

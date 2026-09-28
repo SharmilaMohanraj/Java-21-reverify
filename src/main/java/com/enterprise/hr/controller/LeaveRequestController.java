@@ -6,6 +6,7 @@ import com.enterprise.hr.dto.LeaveRequestResponse;
 import com.enterprise.hr.service.LeaveRequestService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -39,11 +40,13 @@ public class LeaveRequestController {
     }
 
     @GetMapping("/pending-subordinates")
+    @PreAuthorize("hasRole('MANAGER')")
     public List<LeaveRequestResponse> pendingSubordinates(Authentication authentication) {
         return leaveRequests.pendingSubordinates(callerEmail(authentication));
     }
 
     @PatchMapping("/{id}/decision")
+    @PreAuthorize("hasRole('MANAGER')")
     public LeaveRequestResponse decide(Authentication authentication, @PathVariable Long id,
                                        @Valid @RequestBody LeaveDecisionRequest request) {
         return leaveRequests.decide(callerEmail(authentication), id, request);

@@ -21,8 +21,8 @@
 
 ## Remediation status
 - Previous remediation complete: payroll timestamp, organization assignment guards, current-employee JWT lookup, full MySQL boot/API verification, and inspectable JSON test-results artifact.
-- Current verifier remediation planned: enforce MANAGER authority on manager leave endpoints; constrain leave decisions to APPROVED/REJECTED at DTO deserialization/validation; consolidate `BusinessRuleException` and attendance business errors to the shared structured error contract; add ID-excluding organization update uniqueness checks; map payroll gross/deduction/net amount names to `grossAmount`, `deductionAmount`, and `netAmount`; reformat identified generated Java source files to proper multi-line form.
-- Independent remediation groups: leave/security + exception contract; organization uniqueness + formatting; payroll API/domain naming. Shared error response remains `{timestamp,status,error,message,path}`.
+- Current verifier remediation complete: manager-only `@PreAuthorize` guards protect pending-subordinate listing and leave decisions; request validation rejects `PENDING` decisions; attendance now derives from `BusinessRuleException` and one shared advice returns the structured error contract; case-insensitive ID-excluding organization update checks reject duplicate names; payroll fields/columns use `grossAmount`/`gross_amount`, `deductionAmount`/`deduction_amount`, and `netAmount`/`net_amount`; identified Java sources are clean multi-line files.
+- Shared error response remains `{timestamp,status,error,message,path}`.
 
 ## Unit status
 - identity/organization: Complete — Spring Boot identity domain (Employee, Department, Designation, Role), JPA repositories, validated DTOs/services/controllers, BCrypt/JWT stateless security, and contract-shaped exception responses implemented. Routes include login, employee creation/manager assignment, and department/designation CRUD.
@@ -54,4 +54,8 @@
 - Start script: runs the packaged Spring Boot JAR directly for PID-safe verification and builds that JAR first when it is absent.
 
 ## Unit status: Organization assignment guards
-- Complete: Department and Designation deletion now confirms the resource exists, rejects employee-assigned resources with HTTP 409 `BusinessRuleException` codes `DEPARTMENT_ASSIGNED` / `DESIGNATION_ASSIGNED`, and deletes unassigned resources normally. Focused service tests cover assigned, unassigned, and not-found paths.
+- Complete: Department and Designation deletion now confirms the resource exists, rejects employee-assigned resources with HTTP 409 `BusinessRuleException` codes `DEPARTMENT_ASSIGNED` / `DESIGNATION_ASSIGNED`, and deletes unassigned resources normally. Update routes also reject a case-insensitive duplicate name belonging to another resource before mutation.
+
+## Unit status: Verifier remediation
+- Complete: pending subordinate leave and leave decision routes are MANAGER-only; `PENDING` decision values are rejected by DTO validation; one `ApiExceptionHandler` owns structured business-rule conflicts; attendance conflicts derive from `BusinessRuleException`; payroll amount API/domain/column names meet the declared contract; requested Java source files are formatted multi-line.
+- Verification: `./gradlew test --no-daemon` passed after remediation. Boot attempted 3/3 times via `scripts/start.sh`; each failed because the external MySQL service was unavailable at `localhost:3306` (`CommunicationsException: Connection refused`). `tests-artifacts/api_test_report.xlsx`, `project_report.docx`, and `test_results.json` were regenerated honestly, preserving three prior observed HTTP rows, recording the passing Gradle suite, and recording the boot failure as FAIL/skipped.

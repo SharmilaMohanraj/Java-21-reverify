@@ -5,7 +5,6 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -14,9 +13,9 @@ public record PayrollRecordRequest(
         @NotNull @Positive Long employeeId,
         @NotNull LocalDate periodStart,
         @NotNull LocalDate periodEnd,
-        @NotNull @DecimalMin(value = "0.00") @Digits(integer = 17, fraction = 2) BigDecimal grossPay,
-        @NotNull @DecimalMin(value = "0.00") @Digits(integer = 17, fraction = 2) BigDecimal deductions,
-        @NotNull @DecimalMin(value = "0.00") @Digits(integer = 17, fraction = 2) BigDecimal netPay,
+        @NotNull @DecimalMin(value = "0.00") @Digits(integer = 17, fraction = 2) BigDecimal grossAmount,
+        @NotNull @DecimalMin(value = "0.00") @Digits(integer = 17, fraction = 2) BigDecimal deductionAmount,
+        @NotNull @DecimalMin(value = "0.00") @Digits(integer = 17, fraction = 2) BigDecimal netAmount,
         Instant paidAt
 ) {
     @AssertTrue(message = "period end must not be before period start")
@@ -24,9 +23,9 @@ public record PayrollRecordRequest(
         return periodStart == null || periodEnd == null || !periodEnd.isBefore(periodStart);
     }
 
-    @AssertTrue(message = "net pay must equal gross pay minus deductions")
-    public boolean isNetPayConsistent() {
-        return grossPay == null || deductions == null || netPay == null
-                || grossPay.subtract(deductions).compareTo(netPay) == 0;
+    @AssertTrue(message = "net amount must equal gross amount minus deduction amount")
+    public boolean isNetAmountConsistent() {
+        return grossAmount == null || deductionAmount == null || netAmount == null
+                || grossAmount.subtract(deductionAmount).compareTo(netAmount) == 0;
     }
 }

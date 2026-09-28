@@ -18,7 +18,7 @@ import org.hibernate.annotations.Check;
 
 @Entity
 @Table(name = "payroll_record")
-@Check(constraints = "period_end >= period_start AND gross_pay >= 0 AND deductions >= 0 AND net_pay = gross_pay - deductions")
+@Check(constraints = "period_end >= period_start AND gross_amount >= 0 AND deduction_amount >= 0 AND net_amount = gross_amount - deduction_amount")
 public class PayrollRecord {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -39,18 +39,18 @@ public class PayrollRecord {
 
     @NotNull
     @DecimalMin(value = "0.00")
-    @Column(name = "gross_pay", nullable = false, precision = 19, scale = 2)
-    private BigDecimal grossPay;
+    @Column(name = "gross_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal grossAmount;
 
     @NotNull
     @DecimalMin(value = "0.00")
-    @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal deductions;
+    @Column(name = "deduction_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal deductionAmount;
 
     @NotNull
     @DecimalMin(value = "0.00")
-    @Column(name = "net_pay", nullable = false, precision = 19, scale = 2)
-    private BigDecimal netPay;
+    @Column(name = "net_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal netAmount;
 
     @Column(name = "paid_at")
     private Instant paidAt;
@@ -58,18 +58,18 @@ public class PayrollRecord {
     protected PayrollRecord() { }
 
     public PayrollRecord(Employee employee, LocalDate periodStart, LocalDate periodEnd,
-                         BigDecimal grossPay, BigDecimal deductions, BigDecimal netPay) {
-        this(employee, periodStart, periodEnd, grossPay, deductions, netPay, null);
+                         BigDecimal grossAmount, BigDecimal deductionAmount, BigDecimal netAmount) {
+        this(employee, periodStart, periodEnd, grossAmount, deductionAmount, netAmount, null);
     }
 
     public PayrollRecord(Employee employee, LocalDate periodStart, LocalDate periodEnd,
-                         BigDecimal grossPay, BigDecimal deductions, BigDecimal netPay, Instant paidAt) {
+                         BigDecimal grossAmount, BigDecimal deductionAmount, BigDecimal netAmount, Instant paidAt) {
         this.employee = employee;
         this.periodStart = periodStart;
         this.periodEnd = periodEnd;
-        this.grossPay = grossPay;
-        this.deductions = deductions;
-        this.netPay = netPay;
+        this.grossAmount = grossAmount;
+        this.deductionAmount = deductionAmount;
+        this.netAmount = netAmount;
         this.paidAt = paidAt;
     }
 
@@ -80,12 +80,12 @@ public class PayrollRecord {
     public void setPeriodStart(LocalDate periodStart) { this.periodStart = periodStart; }
     public LocalDate getPeriodEnd() { return periodEnd; }
     public void setPeriodEnd(LocalDate periodEnd) { this.periodEnd = periodEnd; }
-    public BigDecimal getGrossPay() { return grossPay; }
-    public void setGrossPay(BigDecimal grossPay) { this.grossPay = grossPay; }
-    public BigDecimal getDeductions() { return deductions; }
-    public void setDeductions(BigDecimal deductions) { this.deductions = deductions; }
-    public BigDecimal getNetPay() { return netPay; }
-    public void setNetPay(BigDecimal netPay) { this.netPay = netPay; }
+    public BigDecimal getGrossAmount() { return grossAmount; }
+    public void setGrossAmount(BigDecimal grossAmount) { this.grossAmount = grossAmount; }
+    public BigDecimal getDeductionAmount() { return deductionAmount; }
+    public void setDeductionAmount(BigDecimal deductionAmount) { this.deductionAmount = deductionAmount; }
+    public BigDecimal getNetAmount() { return netAmount; }
+    public void setNetAmount(BigDecimal netAmount) { this.netAmount = netAmount; }
     public Instant getPaidAt() { return paidAt; }
     public void setPaidAt(Instant paidAt) { this.paidAt = paidAt; }
 }
