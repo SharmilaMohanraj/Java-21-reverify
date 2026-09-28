@@ -17,6 +17,10 @@
 - Packages: domain, dto, repository, service, controller, security, exception, config.
 - Independent implementation groups: identity/organization; attendance; leave workflow; payroll; performance cycles; reporting. Shared API contract: JSON `/api`; error `{timestamp,status,error,message,path}`; ISO-8601 dates/times; DTOs never expose password hashes.
 - Domain entity contract: generated Long ids. Roles exactly HR/MANAGER/EMPLOYEE and leave statuses exactly PENDING/APPROVED/REJECTED.
+- Remediation contract: payroll adds nullable ISO-8601 `paidAt: Instant` to entity/request/response/service; department/designation deletes return `BusinessRuleException` HTTP 409 with codes `DEPARTMENT_ASSIGNED` / `DESIGNATION_ASSIGNED` when `Employee` references them; JWT authentication requires the token subject to resolve to an Employee and derives the granted role from that current employee record.
+
+## Remediation status
+- Planned: payroll timestamp, organization assignment guards, current-employee JWT lookup, full MySQL boot/API verification, and inspectable JSON test-results artifact.
 
 ## Unit status
 - identity/organization: Complete — Spring Boot identity domain (Employee, Department, Designation, Role), JPA repositories, validated DTOs/services/controllers, BCrypt/JWT stateless security, and contract-shaped exception responses implemented. Routes include login, employee creation/manager assignment, and department/designation CRUD.
