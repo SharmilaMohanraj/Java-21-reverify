@@ -20,7 +20,9 @@
 - Remediation contract: payroll adds nullable ISO-8601 `paidAt: Instant` to entity/request/response/service; department/designation deletes return `BusinessRuleException` HTTP 409 with codes `DEPARTMENT_ASSIGNED` / `DESIGNATION_ASSIGNED` when `Employee` references them; JWT authentication requires the token subject to resolve to an Employee and derives the granted role from that current employee record.
 
 ## Remediation status
-- Planned: payroll timestamp, organization assignment guards, current-employee JWT lookup, full MySQL boot/API verification, and inspectable JSON test-results artifact.
+- Previous remediation complete: payroll timestamp, organization assignment guards, current-employee JWT lookup, full MySQL boot/API verification, and inspectable JSON test-results artifact.
+- Current verifier remediation planned: enforce MANAGER authority on manager leave endpoints; constrain leave decisions to APPROVED/REJECTED at DTO deserialization/validation; consolidate `BusinessRuleException` and attendance business errors to the shared structured error contract; add ID-excluding organization update uniqueness checks; map payroll gross/deduction/net amount names to `grossAmount`, `deductionAmount`, and `netAmount`; reformat identified generated Java source files to proper multi-line form.
+- Independent remediation groups: leave/security + exception contract; organization uniqueness + formatting; payroll API/domain naming. Shared error response remains `{timestamp,status,error,message,path}`.
 
 ## Unit status
 - identity/organization: Complete — Spring Boot identity domain (Employee, Department, Designation, Role), JPA repositories, validated DTOs/services/controllers, BCrypt/JWT stateless security, and contract-shaped exception responses implemented. Routes include login, employee creation/manager assignment, and department/designation CRUD.
